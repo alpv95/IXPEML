@@ -17,7 +17,7 @@ For the Deep Learning track reconstruction, the required packages are summarized
 
 ## Running
 
-See the example jupyter notebook ```Example/example.ipynb```. Example datasets are included in a google drive (~1GB total), and should be downloaded and saved in ```Example/data/```. We give a brief summary of the pipeline below.
+See the example jupyter notebook ```Example/example.ipynb```. Example datasets are included in a google drive (~1.5GB total), and should be downloaded and saved in ```Example/data/```. We give a brief summary of the pipeline below.
 
 
 
