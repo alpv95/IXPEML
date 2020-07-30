@@ -23,13 +23,11 @@ from util.methods import *
 
 class NetTest(object):
     """Interface for testing trained networks on measured data"""
-    base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))      #"/home/users/alpv95/khome/tracksml/"
-    model_base = os.path.join(base, "net_archive", "")     #"/home/users/alpv95/khome/tracksml/net_archive/"
-    #model_base = "/home/users/alpv95/khome/tracksml/data/nn/"
-    data_base =  base #os.path.join(base, "example/data", "")        #"/home/users/alpv95/khome/tracksml/notebooks/"
-    #data_base = "/home/users/alpv95/khome/tracksml/real_data/"
-    save_base =  base #os.path.join(base, "notebooks", "")       #"/home/users/alpv95/khome/tracksml/notebooks/"
-    plot_base = "/home/users/alpv95/khome/tracksml/mods/paper/"
+    base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    model_base = os.path.join(base, "net_archive", "")
+    data_base =  base 
+    save_base =  base 
+    plot_base = base
 
     def __init__(self, nets=[], datasets=[], fitmethod="stokes", plot=False, n_nets=1, cut=0.815, datatype="sim",
                 save_table=None, input_channels=1, stokes_correct=None):
@@ -54,7 +52,7 @@ class NetTest(object):
         up2 = lambda p: os.path.dirname(os.path.dirname(p))
 
         with h5py.File(os.path.join(up2(net), 'opts.h5'),'r') as f:
-             batch_size = 1024 #Largest possible batch size allowed by memory
+             batch_size = 2048 #Can be adjusted if there are memory GPU memory problems during prediction
              losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
 
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))
