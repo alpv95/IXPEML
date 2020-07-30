@@ -166,7 +166,7 @@ class MSErrLossAll1(nn.Module):
         energy = target[:,4]
         loss = 0.5 * torch.exp(-input[:,2]) * ( ((norm - target[:,:2])**2).sum(1) * self.alpha #) + 0.5 * input[:,2]  
               + ( ( (norm[:,0]**2 - norm[:,1]**2) - (target[:,0]**2 - target[:,1]**2) )**2 + (2*norm[:,0]*norm[:,1] - 2*target[:,0]*target[:,1])**2 ) ) \
-              + self.lambda_abs * ((input[:,3:5] - abs_pt)**2).sum(1) + self.lambda_E * ((input[:,5] - energy)**2) \
+              + self.lambda_abs * ((input[:,3:5] - abs_pt)**2).sum(1) + 0.4*self.lambda_E * F.smooth_l1_loss(2.5*input[:,5],2.5*energy,reduction='none') \
               + 0.5 * input[:,2]
 
         if self.reduce:

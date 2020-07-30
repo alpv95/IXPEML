@@ -22,11 +22,11 @@ def main():
     Spec = namedtuple('Spec', ['name', 'data_file', 'loss', 'alpha_loss','Z','lambda_abs','lambda_E','optim_method',
                         'input_channels','n_multistarts', 'n_multistarts_per_job','n_threads', 'subset'])
 
-    use_cluster = True  # default
+    use_cluster = True
     data_dir = os.path.realpath('data/')
-    data_file = data_dir + "/expanded/train733_flat/"
+    data_file = data_dir + "/expanded/train733_flat1/"
 
-    job = Spec(name='733flat_mserrall1_3', data_file=data_file, loss='mserrall1', alpha_loss=1.0, Z=None, lambda_abs=0.1, lambda_E=0.12,
+    job = Spec(name='733flat_mserrall1_El1loss_small', data_file=data_file, loss='mserrall1', alpha_loss=1.0, Z=None, lambda_abs=0.1, lambda_E=0.12,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
 
     #  Get full/through-symlink paths, which are needed by the jobs that run on the cluster
