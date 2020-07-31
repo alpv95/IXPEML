@@ -1,3 +1,6 @@
+'''
+Set of helpful methods for data manipulation.
+'''
 import numpy as np
 from itertools import tee
 import torch

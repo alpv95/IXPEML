@@ -1,3 +1,8 @@
+'''
+Takes fits files of GPDSW reconstructed hexagonal photoelectron tracks and assembles them into square tracks useable by NN ensembles.
+For both real (measured) and simulated tracks. 
+'''
+
 import os
 import h5py
 import numpy as np

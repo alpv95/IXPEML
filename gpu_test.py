@@ -1,3 +1,7 @@
+'''
+Wrapper file to apply an ensemble of NNs to square track datasets.
+'''
+
 from util.net_test import *
 import os, sys
 import argparse

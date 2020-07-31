@@ -1,3 +1,7 @@
+'''
+Dictionary of NN ensembles, these are saved in net_archive. For use in gpu_test.py and net_test.py
+'''
+
 
 ensembles = { "pol_only": ['final_MSERRALL_PL2_aug1_lowreg_alpha1/models/mom_1024_171.ptmodel',
 'final_MSERRALL_PL2_aug1/models/RLRP_1024_131.ptmodel',

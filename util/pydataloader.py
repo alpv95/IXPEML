@@ -1,7 +1,6 @@
 '''
 ALP torch.utils.data.Dataset class that allows for fast reading and shuffling of data for training and validation
 Much more efficient than passing around huge numpy arrays
-TODO: eventually include options to load absorption points/any other info required for training/val 
 '''
 import math
 import h5py

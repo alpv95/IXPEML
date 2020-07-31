@@ -1,3 +1,8 @@
+'''
+Class with framework to run individual NNs and NN ensembles on simulated and measured track datasets.
+Inlcudes weighting and cut polarization analyses.
+'''
+
 import torch
 import numpy as np
 import pickle
@@ -22,7 +27,7 @@ from astropy.io import fits
 from util.methods import *
 
 class NetTest(object):
-    """Interface for testing trained networks on measured data"""
+    """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     model_base = os.path.join(base, "net_archive", "")
     data_base =  base 
@@ -48,6 +53,10 @@ class NetTest(object):
 
 
     def _predict(self, net, dataset, bayes=False,): #base single net on single dataset prediction
+        '''
+        Predicts NN track angles with NN 'net' on 'dataset'.
+        Requires GPU for fast computation.
+        '''
         datatype = self.datatype
         up2 = lambda p: os.path.dirname(os.path.dirname(p))
 
@@ -129,6 +138,9 @@ class NetTest(object):
         return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, angles1, errors1, xy_abs_pts
 
     def stokes_correction(self, angles):
+        '''
+        Corrects predicted photoelectron angles for spurious modulation by removing measured Stokes' parameters from calibration maps. 
+        '''
         anchors_hex = angles[-1] #xy_abs_pts
         anchors_sq = angles[6] #mom_abs_pts
         abs_pts = angles[5] #abs_pts NN
@@ -179,6 +191,9 @@ class NetTest(object):
             (0.5 - mu**2/4 * np.sin(2*phi)**2)*Q**4 + (mu**2/8 * np.sin(4*phi))*Q**2 ) )
           
     def _mom_cut(self,angles,moms):
+        '''
+        Applies moment based cuts to predicted photoelectron angles.
+        '''
         mom_cuts = np.arange(1,4,0.01)
         for mom_cut in mom_cuts:
             if len(angles[moms > mom_cut]) < self.ellipticity_cut * len(angles):
@@ -187,6 +202,9 @@ class NetTest(object):
         return mom_cut
 
     def _error_cut(self,angles,errors):
+        '''
+        Applies error based cuts to predicted photoelectron angles.
+        '''
         mom_cuts = np.linspace(0.5,2.8,60)[::-1]
         for mom_cut in mom_cuts:
             if len(angles[errors < mom_cut]) < self.ellipticity_cut * len(angles):
@@ -212,6 +230,20 @@ class NetTest(object):
         return Cn
 
     def fit_mod(self, angles, method="stokes", error_weight=1):
+        '''
+        Fits dataset of angles for modulation factor mu and EVPA phi0 with either standard Stokes method (Kislat et al.), weighted MLE (Peirson et al.) or ellipticity cuts.
+        
+        input:
+        * angles -- tuple of lists containing photoelectron angles (from NN, moment analysis and truth if tracks simulated), moments and errors (angles_NN, angles_mom, angles_true, moments, errors)
+        * method -- either 'stokes' or 'weighted_MLE', 'weighted_MLE' applies ellipticty cut stokes to the angles_mom
+        * error_weight -- lambda parameters that controls weighting strength in 'weighted_MLE', see (Peirson et al.) 
+
+        returns:
+        * mu -- list of final modulation factors, [NN, moment analysis, truth]
+        * phi0 -- list of final EVPAs, [NN, moment analysis, truth]
+        * mu_err -- errors on mu, [NN, moment analysis, truth]
+        * phi_err -- errors on phi0, [NN, moment analysis, truth]
+        '''
         mu = []
         mu_err = []
         phi0 = []
@@ -352,6 +384,10 @@ class NetTest(object):
 
 
     def ensemble_predict(self, bayes=False):
+        '''
+        Goes through list of NNs in chosen ensemble and applies them to chosen datasets. Results are combined and saved in pickle file.
+        Final mus and EVPAs for whole datasets are printed at the end.
+        '''
         for data in self.datasets:
             name = data.replace(self.data_base,"") + "__" + "ensemble"
             angles = ([],[],[],[],[],[],[],[],[],[],[],[],[])
