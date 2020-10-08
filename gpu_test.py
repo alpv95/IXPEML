@@ -8,7 +8,7 @@ import argparse
 from util.definitions import ensembles
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--ensemble', type=str,choices=["pol_only","pol_abs_E", "bigE", "flat", "pl1_small","pl1_weight","flat_weight","flat_weight_test"],
+parser.add_argument('--ensemble', type=str,choices=["flat_weight"],
                     help='Which network ensemble to use: Ensemble prediction or single prediction')
 parser.add_argument('--plot', action='store_true',
                     help='Whether to plot histograms and modulation curves')

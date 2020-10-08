@@ -50,10 +50,10 @@ python3 run_build_fitsdata.py /input/directory/ /output/directory --Erange 1.8 8
 The output directory will split the initial hexaginal dataset into 3 folders: train, val and test. The fraction of total tracks in each of these can be edited in `run_build_fitsdata.py`.
 Each individual hexagonal track gets 6 square conversions: two hex-to-square pixel shifts for each 120deg rotation. This allows us to later re-rotate and remove the hex-to-square biases. Each of the 6 track images is 30x30 pixels, so depending on the size of the dataset, the output file could be large.  
 
-3. Run the DL ensemble track reconstruction on the dataset(s) formed in step 2. This is done by running gpu_test.py with the ensemble flag. There is currently on one choice of DL ensemble: "bigE".
+3. Run the DL ensemble track reconstruction on the dataset(s) formed in step 2. This is done by running gpu_test.py with the ensemble flag. There is currently only one choice of DL ensemble: "flat_weight".
 All of the results for individual tracks (including the moment analysis results) are saved in a pickle file at the end of this run. The moments, moments_cuts, NN and weighted NN (lambda = 2) modulation/phi results are printed at the end. Example code:
 ```
-python3 gpu_test.py --data_list example_dataset/train/ --save pickle_filename_where_results_will_be_saved.pickle --ensemble bigE
+python3 gpu_test.py --data_list example_dataset/train/ --save pickle_filename_where_results_will_be_saved.pickle --ensemble flat_weight
 ```
 This requires a GPU to be available for reasonable runtime (ideally multiple if the dataset is very large, >~ 1e6 tracks).
 
