@@ -29,8 +29,8 @@ from util.methods import *
 class NetTest(object):
     """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    model_base = os.path.join(base, "net_archive", "")
-    data_base =  base 
+    model_base = os.path.join(base, "data/nn", "")
+    data_base =  os.path.join(base, "data/expanded","")
     save_base =  base 
     plot_base = base
 
@@ -189,6 +189,15 @@ class NetTest(object):
             net_factor = self.n_nets * 3
         return np.sqrt( 1/(4*(N / net_factor)*(Q**2 + U**2)**2) * ( (0.5 - mu**2/4 * np.cos(2*phi)**2) + 
             (0.5 - mu**2/4 * np.sin(2*phi)**2)*Q**4 + (mu**2/8 * np.sin(4*phi))*Q**2 ) )
+
+    def _MLError(self, angles, mu_hat, phi_hat):
+        denom = (1 + mu_hat*np.cos(2*(angles - phi_hat)))**2
+        I00 = np.sum(np.cos(2*(angles - phi_hat))**2 / denom)
+        I01 = np.sum(2*np.sin(2*(angles - phi_hat)) / denom)
+        I11 = np.sum(4*mu_hat*(mu_hat + np.cos(2*(angles - phi_hat)) ) / denom)
+        I = np.array([[I00,I01],[I01,I11]])
+        I_1 = np.linalg.inv(I)
+        return np.sqrt(I_1[0,0]), np.sqrt(I_1[1,1]), I_1[0,1]/np.sqrt(I_1[0,0]*I_1[1,1])
           
     def _mom_cut(self,angles,moms):
         '''
@@ -259,15 +268,21 @@ class NetTest(object):
                     N = len(angle)
                     Q = sum(np.cos(2*angle)) / N
                     U = sum(np.sin(2*angle)) / N
-                    
+                
                     mu.append(2*np.sqrt(Q**2 + U**2))
                     phi0.append(np.arctan2(U,Q)/2) 
-                    if i == 0:
-                        mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N,net=True))
-                        phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N,net=True))
-                    else:
-                        mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N))
-                        phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N))
+
+                    errmu, errphi0, _ = self._MLError(angle, mu[i], phi0[i])
+
+                    mu_err.append(errmu)
+                    phi0_err.append(errphi0)
+
+                    # if i == 0:
+                    #     mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N,net=True))
+                    #     phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N,net=True))
+                    # else:
+                    #     mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N))
+                    #     phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N))
 
 
                 elif method == "weighted_MLE":
@@ -298,8 +313,11 @@ class NetTest(object):
                         mu.append(np.linalg.norm(res['x'])), phi0.append(np.arctan2(res['x'][1], res['x'][0]) / 2)        
                         #For now calculate errors using stokes format
 
-                    mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N))
-                    phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N))
+                    errmu, errphi0, _ = self._MLError(angle, mu[i], phi0[i])
+                    mu_err.append(errmu)
+                    phi0_err.append(errphi0)
+                    # mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N))
+                    # phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N))
                 else:
                     raise("Method not recognized")
 
@@ -361,9 +379,6 @@ class NetTest(object):
                     abs_pts_err = np.mean((angles[5][0] - angles[7][0])**2 + (angles[5][1] - angles[7][1])**2)
                     mom_abs_pts_err = np.mean((angles[6][0] - angles[7][0])**2 + (angles[6][1] - angles[7][1])**2)
                     energy_err = np.mean((angles[8] - angles[9])**2)
-                    #abs_pts_err = None
-                    #mom_abs_pts_err = None
-                    #energy_err = None
                     print("Accuracies:\n weighted_angle2: {:.3f} | angle2: {:.3f} | mom_angle2: {:.3f} | weighted_angle1: {:.3f} | angle1: {:.3f} | mom_angle1: {:.3f} | abs_pts: {} | mom_abs_pts: {} | energy: {}\n".format(
                                 angle_err_weighted2, angle_err2, mom_angle_err2, angle_err_weighted1, angle_err1, mom_angle_err1, abs_pts_err, mom_abs_pts_err, energy_err))
                 print("{}:\n mu + err | phi0 + err\n".format(name))
@@ -379,7 +394,8 @@ class NetTest(object):
 
         if self.save_table is not None:
             df = pd.DataFrame.from_dict(self.results,orient='index').transpose()
-            df.to_pickle(self.base + self.save_table + ".pickle")
+            df.to_pickle(os.path.join(self.save_base, self.save_table + ".pickle"))
+            print("Saved to: {}".format(os.path.join(self.save_base, self.save_table + ".pickle")))
             print("SAVED!")
 
 

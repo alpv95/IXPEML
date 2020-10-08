@@ -205,6 +205,7 @@ class MSErrLossAll2(nn.Module):
     information - the certainty of the prediction/eccentricity of the system. Can report this (or a normalized
     version that accounts for the max length that's different from the axes vs the corners due to anisotropy).
     """
+    # 0.4*self.lambda_E * F.smooth_l1_loss(2.5*input[:,5],2.5*energy,reduction='none') 
     def __init__(self, size_average=True, reduce=True, alpha=1, Z=None, lambda_abs=1, lambda_E=1):
         super(MSErrLossAll2, self).__init__()
         self.size_average = size_average
@@ -216,13 +217,13 @@ class MSErrLossAll2(nn.Module):
 
     def forward(self, input, target):
         # Works when target is broadcastable
-        norm1 = input[:,:2] / torch.sqrt(input[:,0]**2 + input[:,1]**2).unsqueeze(1)
-        norm2 = input[:,3:5] / torch.sqrt(input[:,3]**2 + input[:,4]**2).unsqueeze(1)        
-        abs_pt = target[:,4:6]
-        energy = target[:,6]
-        loss = ( 0.5 * torch.exp(-input[:,2]) * ( ((norm1 - target[:,:2])**2).sum(1) ) + 0.5 * input[:,2]  
-               + (0.5 * torch.exp(-input[:,5]) * ( ((norm2 - target[:,2:4])**2).sum(1) ) + 0.5 * input[:,5]) * self.alpha ) \
-              + self.lambda_abs * ((input[:,6:8] - abs_pt)**2).sum(1) + self.lambda_E * ((input[:,8] - energy)**2)
+        norm = input[:,:2] / torch.sqrt(input[:,0]**2 + input[:,1]**2).unsqueeze(1)
+        abs_pt = target[:,2:4]
+        energy = target[:,4]
+        loss = 0.5 * ((norm - target[:,:2])**2).sum(1) * self.alpha \
+              + 0.5 * torch.exp(-input[:,2]) * (( ( (norm[:,0]**2 - norm[:,1]**2) - (target[:,0]**2 - target[:,1]**2) )**2 + (2*norm[:,0]*norm[:,1] - 2*target[:,0]*target[:,1])**2 ) ) \
+              + self.lambda_abs * ((input[:,3:5] - abs_pt)**2).sum(1) + 0.4 * self.lambda_E * (F.smooth_l1_loss(2.5*input[:,5],2.5*energy,reduction='none') + 0.3*0.5*torch.abs(1 + torch.sign(input[:,5] - energy)) * (2.5*input[:,5] - 2.5*energy)**2) \
+              + 0.5 * input[:,2]
 
         if self.reduce:
             if self.size_average:
@@ -230,12 +231,12 @@ class MSErrLossAll2(nn.Module):
             else:
                 loss = torch.sum(loss)
         if self.Z is not None:
-            return loss + self.Z * self.Z_m(norm1)
+            return loss + self.Z * self.Z_m(norm)
         else:
             return loss
 
     def Z_m(self, cs):
-        n_modes = 3
+        n_modes = 5
         Z_m = ( ( self.Cnx(1,cs) ) ** 2  + ( self.Snx(1,cs) ) ** 2 ).unsqueeze(0)
         for k in range(2,n_modes):
             Z_m = torch.cat((Z_m, ( ( self.Cnx(k,cs) ) ** 2  + ( self.Snx(k,cs) ) ** 2 ).unsqueeze(0)), dim=0)  

@@ -1,13 +1,47 @@
 '''
 Set of helpful methods for data manipulation.
 '''
+import os
 import numpy as np
+import multiprocess as mp
 from itertools import tee
 import torch
+from ipopt import minimize_ipopt
+from scipy.optimize import minimize
+from scipydirect import minimize as minimize_direct
+from scipy.stats import norm
+from util.net_test import *
+
+PIXEL_X_SPACE = 0.05 #in micrometers
+PIXEL_Y_SPACE = 0.0433
 
 def MDP99(N,mu100):
     ''' MDP99 for either Neff or N'''
     return 4.29 / (mu100*np.sqrt(N)) *100
+
+def weighted_stokes(angles, weights, lambd):
+    '''If weights equal (or lambd == 0) this reduces to normal Stokes, and Neff == N'''
+    if weights is None:
+        weights = np.ones(len(angles))
+    Q = np.sum(2*weights**lambd*np.cos(2*angles))
+    U = np.sum(2*weights**lambd*np.sin(2*angles))
+    I = np.sum(weights**lambd)
+    
+    mu = np.sqrt(Q**2 + U**2) / I
+    phi0 = 0.5*np.arctan2(U,Q)
+    Neff = I**2 / np.sum(weights**(2*lambd))
+    
+    return mu, phi0, Neff
+
+def ellipticity_cut(angles, moms, keep_fraction):
+        '''
+        Applies ellipticity based cuts to predicted photoelectron angles.
+        '''
+        mom_cuts = np.arange(1,4,0.01)
+        for mom_cut in mom_cuts:
+            if len(angles[moms > mom_cut]) < keep_fraction * len(angles):
+                break
+        return mom_cut
 
 def pi_pi(x):
     '''Bring angle (radians) to range [-pi,pi]'''
@@ -27,7 +61,7 @@ def Aeff(E):
     except OSError:
         area = np.loadtxt("Rev_IXPE_Mirror_Aeff.txt")
         eff1 = np.loadtxt("du_efficiency_687mbar.txt")
-    afactor = (eff1[:,1] * area[:,1]/0.85 * 3 * 
+    afactor = (eff1[:,1] * area[:,1] * 3 * 
                 0.04 * 10**(-10)/ (1.6022e-9))
     idx = np.argmin(abs(eff1[:,0] - E))
     return afactor[idx]
@@ -47,7 +81,7 @@ def Aeff_train(E):
     except OSError:
         area = np.loadtxt("Rev_IXPE_Mirror_Aeff.txt")
         eff1 = np.loadtxt("du_efficiency_687mbar.txt")
-    afactor = (eff1[:,1] * area[:,1]/0.85 * 3 * 
+    afactor = (eff1[:,1] * area[:,1] * 3 * 
                 0.04 * 10**(-10)/ (1.6022e-9))
     idx = np.argmin(abs(eff1[:,0] - E))
     return afactor[idx]
@@ -68,6 +102,20 @@ def triple_angle_rotate(ang):
 def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom):
     return (abs_pts_sq - mom_abs_pts_sq) * np.array([0.05,0.0433]) + xy_abs_mom
 
+def circular_mean(angles, axis):
+    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
+    mu = mean / np.linalg.norm(mean,axis=0)
+    return 0.5*np.arctan2(mu[1],mu[0])
+
+def circular_mean_weight(angles, weights, axis):
+    mean = np.array([np.mean(weights*np.cos(2*angles),axis=axis), np.mean(weights*np.sin(2*angles),axis=axis)])
+    mu = mean / np.linalg.norm(mean,axis=0)
+    return 0.5*np.arctan2(mu[1],mu[0])
+
+def circular_std(angles, axis):
+    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
+    R = np.linalg.norm(mean,axis=0)
+    return 0.5*np.sqrt((1 - R**2) / (R * (2 - R**2)))
 
 def stokes(angles):
     N = len(angles)
@@ -75,6 +123,120 @@ def stokes(angles):
     U = sum(np.sin(2*angles)) / N
  
     return 2*np.sqrt(Q**2 + U**2), np.arctan2(U,Q)/2
+
+def generate_spectrum(Angles, N_E, fraction=1):
+    """
+    Generates spectrum from set of NN, mom, sim angles (and associated errors,moments) given the spectral energy distribution N_E
+    Fraction denotes fraction of tracks to use in making spectrum from the maximum possible
+    """
+    angles, angles_mom, angles_sim, moms, errors, energies_sim = Angles
+
+    E = set(energies_sim[:])
+    E = np.sort(list(E))
+    max_tracks = len(angles_mom[energies_sim == E[10:71][np.argmax(N_E(E[10:71]))]]) / np.max(N_E(E[10:71]))
+    print(max_tracks)
+
+    angles_NN_spec = []
+    angles_mom_spec = []
+    angles_sim_spec = []
+    moms_spec = []
+    errors_spec = []
+    energies_spec = []
+
+    for i,e in enumerate(E[10:71]):
+        cut = (e == energies_sim)
+        N = int(N_E(e) * fraction * max_tracks)
+        if i == 0 or e > 8.89:
+            N = int(N*0.5)
+        idxs = np.random.choice(np.arange(np.sum(cut)), size=N, replace=False)
+
+        angles_NN_spec.append(angles[cut][idxs])
+        angles_mom_spec.append(angles_mom[cut][idxs])
+        angles_sim_spec.append(angles_sim[cut][idxs])
+        errors_spec.append(errors[cut][idxs])
+        moms_spec.append(moms[cut][idxs])
+        energies_spec.append(energies_sim[cut][idxs])
+
+    angles_NN_spec = np.concatenate(angles_NN_spec,axis=0)
+    angles_mom_spec = np.concatenate(angles_mom_spec)
+    angles_sim_spec = np.concatenate(angles_sim_spec)
+    errors_spec = np.concatenate(errors_spec)
+    moms_spec = np.concatenate(moms_spec)
+    energies_spec = np.concatenate(energies_spec)
+
+    return angles_NN_spec, angles_mom_spec, angles_sim_spec, moms_spec, errors_spec, energies_spec
+
+def bootstrap(angles, B, error_weight=2, n_cpu=None):
+    '''
+    Non-parametric bootstrap
+    angles -> distribution to be boostrapped (angles, angles_mom, angles_sim, moms, errors,)
+    B -> number of boostrap samples
+    '''
+    t = NetTest(n_nets=10)
+    if not n_cpu:
+        n_cpu = os.cpu_count()
+    print("Beginning parallelization on {} cores\n".format(n_cpu))
+    chunks = []
+    chunks += [np.random.choice(np.arange(len(angles[0])), len(angles[0]), replace=True) for _ in range(B)]
+    def sub(idxs):
+        A1 = (angles[0][idxs],angles[1][idxs],angles[2][idxs],angles[3][idxs],angles[4][idxs])
+        mu, phi, _, _ = t.fit_mod(A1, method='stokes')
+        muW, phiW, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=error_weight)
+        return mu, phi, muW, phiW
+    with mp.Pool(processes=n_cpu) as pool:
+        results = pool.map(sub, chunks)
+    print("DONE!")
+    mus, phis, muWs, phiWs = zip(*results)
+    #mus, phis = zip(*results) #muWs, phiWs = zip(*results)
+    MUs = np.concatenate([mus,muWs],axis=1)
+    PHIs = np.concatenate([phis,phiWs],axis=1)
+    # MUs = mus
+    # PHIs = phis
+
+    return MUs, PHIs
+
+def BC(hist,mle):
+    '''
+    Bias-Correction for confidence intervals -- not really applicable to our case
+    '''
+    mu_hat = mle
+    p0 = np.sum(hist < mu_hat) / len(hist)
+    z0 = norm.ppf(p0)
+    g_cdf = [np.sum(hist < hist[i]) / len(hist) if np.sum(hist < hist[i]) > 0 
+             else np.sum(hist <= hist[i]) / len(hist) for i in range(len(hist))] 
+    z_theta = np.array(norm.ppf(g_cdf)) - z0
+    weights = norm.pdf(z_theta - z0) / norm.pdf(z_theta + z0)
+    weights = weights / np.sum(weights)
+    
+    return weights
+
+def Neff_fit(mus, phis, mle, Nbound=2e6, plot=False, pol=False):
+    '''
+    mle -> (N, mu, phi)
+    '''
+    loglike_ipopt = lambda x: -( len(mus)*(np.log(x[0]) - x[0]*x[1]**2 / 4)
+                                         + np.sum( #np.log(mus) 
+                                         - x[0]*mus**2 / 4  
+                                         + x[0]*x[1]*mus * np.cos(2*(phis - x[2])) / 2 ) )
+    bounds=[(0,Nbound),(0.,1),(-np.pi,np.pi)]
+    res = []
+    starts = [mle, (100000,0.01, 0),(1000,0.01,1),(40000,0.03,-1),(10000,0.001,0),(400000,0.001,1),(1000000,0.001,0),(1500000,0.001,1)]
+    if pol:
+        starts = [mle, (100000,0.5, 0),(1000,0.6,1),(40000,0.2,-1),(10000,0.3,0),(400000,1.0,1),(1000000,0.7,0),(1500000,0.8,1)]
+        
+    for x0 in starts:
+        res.append(minimize(loglike_ipopt,x0,method="Nelder-Mead"))
+        res.append(minimize_ipopt(loglike_ipopt, x0=x0, bounds=bounds, tol=1e-7))
+    res.append(minimize_direct(loglike_ipopt, bounds=bounds,))
+    Neff = [r["x"] for r in res if r["x"][1] >= 0.][np.argmin([r["fun"] for r in res if r["x"][1] >= 0.])] #return solution with minimum likelihood
+    if plot:   
+        dist = np.zeros(len(np.arange(0,0.02,0.0001)))
+        for phi in np.linspace(-np.pi/2,np.pi/2,1000):
+            dist += 2*np.pi/1000 * Neff[0]*np.arange(0,0.02,0.0001) / (4*np.pi*100) * np.exp(
+            -Neff[0]*(np.arange(0,0.02,0.0001)**2 + Neff[1]**2 - 2*np.arange(0,0.02,0.0001)*Neff[1]*np.cos(2*(phi - Neff[2]))) / 4)
+        return Neff, [np.arange(0,2,0.01), dist]
+    else:
+        return Neff
 
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."

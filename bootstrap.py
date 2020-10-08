@@ -5,62 +5,18 @@ from ipopt import minimize_ipopt
 import pickle
 import numpy as np
 import multiprocess as mp
-from matplotlib import rcParams
-# Increase the default DPI, and change the file type from png to pdf 
-rcParams['savefig.dpi']           = 300
-#rcParams['savefig.extension']     = "pdf"
-
-# Simplify paths by removing "invisible" points, useful for reducing
-# file size when plotting a large number of points
-rcParams['path.simplify']         = True
-
-# Instead of individually increasing font sizes, point sizes, and line 
-# thicknesses, I found it easier to just decrease the figure size so
-# that the line weights of various components still agree 
-rcParams['figure.figsize']        = 4,4
-
-# In this example I am *not* setting "text.usetex : True", therefore the     
-# following ensures that the fonts in math mode agree with the regular ones.  
-# 
-rcParams['font.family']           = "serif"
-rcParams['mathtext.fontset']      = "custom"
-rcParams['errorbar.capsize']      = 3
-
-# Increase the tick-mark lengths (defaults are 4 and 2)
-rcParams['xtick.major.size']      = 6
-rcParams['ytick.major.size']      = 6 
-rcParams['xtick.minor.size']      = 3   
-rcParams['ytick.minor.size']      = 3
-
-rcParams['xtick.direction']      = "in"
-rcParams['ytick.direction']      = "in" 
-rcParams['xtick.top']      = True
-rcParams['ytick.right']      = True 
-
-# Increase the tick-mark widths as well as the widths of lines 
-# used to draw marker edges to be consistent with the other figure
-# linewidths (defaults are all 0.5)
-rcParams['xtick.major.width']     = 1
-rcParams['ytick.major.width']     = 1
-rcParams['xtick.minor.width']     = 1
-rcParams['ytick.minor.width']     = 1
-rcParams['lines.markeredgewidth'] = 1
-
-# Have the legend only plot one point instead of two, turn off the 
-# frame, and reduce the space between the point and the label  
-rcParams['legend.numpoints']      = 1
-rcParams['legend.frameon']        = False
-rcParams['legend.handletextpad']      = 0.3
-import matplotlib.pyplot as plt
 import torch
 from matplotlib.colors import LogNorm
-from util.net_test import *
-from astropy.io import fits
 from astropy import stats
 import scipy
+from util.methods import *
+from scipy import interpolate
+from scipy.optimize import minimize_scalar
 import pandas as pd
 from scipy.signal import savgol_filter
 import argparse
+from util.methods import *
+from util.net_test import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('B', type=int,
@@ -73,200 +29,218 @@ args = parser.parse_args()
 
 home_dir = '/home/groups/rwr/alpv95/tracksml/'
 
+area = np.loadtxt("notebooks/MMA_cal-eff-area_20200831.txt")[:,(0,-1)]
+eff1 = np.loadtxt("notebooks/du_efficiency_687mbar.txt")
 
-with open(home_dir + "final0_train___bestOG__ensemble_paper.pickle", "rb") as file:
+A = (1e-11 * 6.24151e+8) / (np.log(8) - np.log(2))
+N_E = (10*24*60*60) * np.interp(np.linspace(1,9,1601),area[:,0],area[:,1]) \
+                         * np.interp(np.linspace(1,9,1601),eff1[:,0],eff1[:,1])/0.8 * A * np.linspace(1,9,1601)**(-args.pl) \
+                         * 0.005 
+f = interpolate.interp1d(np.linspace(1,9,1601), N_E, kind="cubic")
+
+# Polarized Data
+with open(home_dir + "fom_pol_big_train___flat_all_pol__ensemble.pickle", "rb") as file:
     A = pickle.load(file)
+angles, angles_mom, angles_sim, moms, errors, _, _, _, _, energies_sim, _, _, _ = A
 
-angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
-energies, energies_sim, angles1, errors1 = A
+# mu1_total = []
+# phi1_total = []
 
-N = 14
+# mdps = []
+# mu1s = []
+# phi1s = []
+# Neff1s = []
+# for _ in range(args.pl_draws):
+t = NetTest(n_nets=10)
+Angles = (angles, angles_mom, angles_sim, moms, errors, energies_sim)
+angles_NN_spec, angles_mom_spec, angles_sim_spec, moms_spec, errors_spec, _ = generate_spectrum(Angles, f, fraction=0.85)
+print(angles_NN_spec.shape)
+errors_spec = np.sqrt(errors_spec.T**2 + 4*circular_std(np.reshape(angles_NN_spec,[len(angles_NN_spec),-1]),axis=1)**2).T
 
-angles = np.reshape(angles, (-1,N), order="F")
-angles_mom = np.reshape(angles_mom, (-1,N), order="F")
-angles_sim = np.reshape(angles_sim, (-1,N), order="F")
-moms = np.reshape(moms, (-1,N), order="F")
-energies = np.reshape(energies, (-1,N), order="F")
-energies_sim = np.reshape(energies_sim, (-1,N), order="F")
-errors = np.reshape(errors, (-1,N), order="F")
-angles1 = np.reshape(angles1, (-1,N), order="F")
-errors1 = np.reshape(errors1, (-1,N), order="F")
-abs_pts = np.reshape(abs_pts, (-1,N), order="F")
-mom_abs_pts = np.reshape(mom_abs_pts, (-1,N), order="F")
-abs_pts_sim = np.reshape(abs_pts_sim, (-1,N), order="F")
+muW_100, phiW_100, _, _ = t.fit_mod((angles_NN_spec[:,:,:10], angles_mom_spec, angles_sim_spec, moms_spec, errors_spec[:,:,:10]), 
+                        method='weighted_MLE', error_weight=1.41)
+print(muW_100, phiW_100)
+mu_100, phi_100, _, _ = t.fit_mod((angles_NN_spec[:,:,:10], angles_mom_spec, angles_sim_spec, moms_spec, errors_spec[:,:,:10]))
+print(mu_100, phi_100)
 
-meanmax1 = 1.9
-meanmax2 = 2.34
-meanmin2 = 0.5
-#OG
-errors[:,(0,2,3,5,6,8,9,)] = errors[:,(0,2,3,5,6,8,9,)] * (meanmax2 - meanmin2) / (meanmax1 - meanmin2) - meanmin2* (meanmax2 - meanmin2) / (meanmax1 - meanmin2)  + meanmin2
+#     mus, phis = bootstrap((angles_NN_spec, angles_mom_spec, angles_sim_spec, moms_spec, errors_spec), args.B, error_weight=1.04)
+#     mu1_total.append(mus)
+#     phi1_total.append(phis)
 
-#if args.mean:
-#    angles = np.average(angles, axis=1, weights=errors**(-1))
-#    print(angles.shape)
-#    angles_mom = np.mean(angles_mom, axis=1)
-#    angles_sim = np.mean(angles_sim, axis=1)
-#    moms = np.mean(moms, axis=1)
-#    energies_sim = np.mean(energies_sim, axis=1)
-#    errors = np.mean(errors, axis=1)
-#    # energies = np.mean(energies, axis=1)
-#    # angles1 = np.mean(angles1, axis=1)
-#    # errors1 = np.mean(errors1, axis=1)
-#    # abs_pts = np.mean(abs_pts, axis=1)
-#    # mom_abs_pts = np.mean(mom_abs_pts, axis=1)
-#    # abs_pts_sim = np.mean(abs_pts_sim, axis=1)
+#     angles_NN_spec = circular_mean(np.reshape(angles_NN_spec,[len(angles_NN_spec),-1]),axis=1)
+#     errors_spec = np.sqrt(np.mean(np.reshape(errors_spec**2,[len(errors_spec),-1]),axis=1))
 
-#mask = np.ones_like(angles, dtype=bool)
-# mask[:,0] = False
-# mask[:,1] = False
-# mask[:,2] = False
-# mask[:,3] = False
-# mask[:,4] = False
-# mask[:,5] = False
-# mask[:,6] = False
-# mask[:,7] = False
-# mask[:,8] = False
-# mask[:,9] = False
-# mask[:,10] = False
-# mask[:,11] = False
-# mask[:,12] = False
-# mask[:,13] = False
-#mask[:,14] = False
-#mask[:,15] = False
-#mask[:,16] = False
-#mask[:,17] = False
-#mask[:,18] = False
-#mask[:,19] = False
-#mask[:,20] = False
-# mask[:,21] = False
-# mask[:,23] = False
-# mask[:,16:23] = False
+#     def mdp(lambd):
+#         mu, _, Neff = weighted_stokes(angles_NN_spec, 1/errors_spec, lambd)
+#         return MDP99(Neff,mu)
 
-#angles = angles[mask]
-#angles_mom = angles_mom[mask]
-#angles_sim = angles_sim[mask]
-#energies_sim = energies_sim[mask]
-#moms = moms[mask]
-#errors = errors[mask]
-# angles1 = angles1[mask]
-# errors1 = errors1[mask]
-#try:
-#    energies = energies[mask]
-#    abs_pts = abs_pts[mask]
-#    mom_abs_pts = mom_abs_pts[mask]
-#    abs_pts_sim = abs_pts_sim[mask]
-#except IndexError:
-#    pass
+#     # res = minimize_scalar(mdp, bounds=(0,8),method="bounded")
+#     mu, phi, Neff = weighted_stokes(angles_NN_spec, None, 0)
+#     print("MDP >> ", mdp(0))
+#     print("Mu >> ", mu)
+#     print("Phi >> ", phi)
+#     print("Neff >> ", Neff)
+#     print("Lambda >> ", 0)
+#     mdps.append(mdp(0))
+#     mu1s.append(mu)
+#     phi1s.append(phi)
+#     Neff1s.append(Neff)
+#     #lambda1s.append(res["x"])
+
+# mu1_total = np.concatenate(mu1_total,axis=0)
+# phi1_total = np.concatenate(phi1_total,axis=0)
+
+# np.save("BOOT_POL2", (mu1_total, phi1_total))
+
+# print("MDP final >> ",np.mean(mdps))
+# print("Mu final >> ",np.mean(mu1s))
+# print("Phi final >> ",np.mean(phi1s))
+# print("Neff final >> ",np.mean(Neff1s))
+# #print("Lambda final >> ",np.mean(lambda1s))
 
 
-E = set(energies_sim[:,0])
-E = np.sort(list(E))
 
-net_list = ["gen4_MSERRALL2dropPL2_aug1/models/RLRP_256_151.ptmodel"]
-data_list = ["gen4_paper2/train/"]
-t = NetTest(nets=net_list, fitmethod="stokes", datasets=data_list, n_nets=14)
+
+with open(home_dir + "review_unpol_train___flat_all_unpol__ensemble.pickle", "rb") as file:
+    A = pickle.load(file)
+angles, angles_mom, angles_sim, moms, errors, _, _, _, _, energies_sim, _, _, _ = A
+
+
+mu0_total = []
+phi0_total = []
+for _ in range(args.pl_draws):
+    Angles = (angles, angles_mom, angles_sim, moms, errors, energies_sim)
+    angles_NN_spec, angles_mom_spec, angles_sim_spec, moms_spec, errors_spec, _ = generate_spectrum(Angles, f, fraction=0.85)
+    errors_spec = np.sqrt(errors_spec.T**2 + 4*circular_std(np.reshape(angles_NN_spec,[len(angles_NN_spec),-1]),axis=1)**2).T
+    print(angles_NN_spec.shape)
+
+    mus, phis = bootstrap((angles_NN_spec[:,:,:10], angles_mom_spec, angles_sim_spec, moms_spec, errors_spec[:,:,:10]), args.B, error_weight=1.41)
+    mu0_total.append(mus)
+    phi0_total.append(phis)
+
+mu0_total = np.concatenate(mu0_total,axis=0)
+phi0_total = np.concatenate(phi0_total,axis=0)
+
+np.save("BOOTUNPOL" + str(args.pl), (mu0_total, phi0_total))
+
+# t = NetTest(n_nets=10)
+# muW, phiW, _, _ = t.fit_mod((angles_NN_spec, angles_mom_spec, angles_sim_spec, moms_spec, errors_spec), 
+#                             method='weighted_MLE', error_weight=1.04)
+# muW, phiW, _ = weighted_stokes(np.ndarray.flatten(angles_NN_spec[:,:,:10]), 1/np.ndarray.flatten(errors_spec[:,:,:10]), 1.84)
+# print("DONE: ", muW, phiW)
+print("DONE")
+
+
+# Neff0 = Neff_fit(mu0_total[:,0], phi0_total[:,0], (np.mean(Neff1s), muW, phiW), Nbound=2e5)
+# Neff1 = Neff_fit(mu1_total[:,0], phi1_total[:,0], (np.mean(Neff1s), np.mean(mu1s), np.median(phi1s)), Nbound=2e5)
+# print(f"Final bootstrap: Neff0 {Neff0[0]} -- Neff1 {Neff1[0]} -- mu1 {np.mean(mu1_total[:,0])} -- MDP0 {MDP99(Neff0[0],np.mean(mu1_total[:,0]))} -- MDP1 {MDP99(Neff1[0],np.mean(mu1_total[:,0]))} ")
+# print(f"Final weighted stokes: Neff1 {np.mean(Neff1s)} -- mu1 {np.mean(mu1s)} -- MDP1 {np.mean(mdps)}")
+
+
+
+
 
 
 
 ###########################################################################
 #For PLs
 
-Aeff= [49.8,62.61,68.92,81.09, 83.8,90.74,93.69,95.11, 
-       92.9,90.68,89.56,87.46,83.67,79.43, 74.2,72.45,69.46, 
-       65.7,62.69,59.65,56.27,52.82,49.53,46.54,44.29,42.03,39.61,
-       37.12,34.98,33.04,31.06,29.64,28.28,26.96,25.68,24.39,   
-       23,21.62,20.45,19.49,18.54,17.65,16.75,15.88,15.19,14.46,13.74,
-       13.27,12.81,12.12,11.07,10.12,9.243,8.403,7.758,7.132,6.521,5.937,
-       5.198,4.458,3.657,3.355,3.114,2.822,2.162,]
+# Aeff= [49.8,62.61,68.92,81.09, 83.8,90.74,93.69,95.11, 
+#        92.9,90.68,89.56,87.46,83.67,79.43, 74.2,72.45,69.46, 
+#        65.7,62.69,59.65,56.27,52.82,49.53,46.54,44.29,42.03,39.61,
+#        37.12,34.98,33.04,31.06,29.64,28.28,26.96,25.68,24.39,   
+#        23,21.62,20.45,19.49,18.54,17.65,16.75,15.88,15.19,14.46,13.74,
+#        13.27,12.81,12.12,11.07,10.12,9.243,8.403,7.758,7.132,6.521,5.937,
+#        5.198,4.458,3.657,3.355,3.114,2.822,2.162,]
 
-Aeff = Aeff / np.max(Aeff)
+# Aeff = Aeff / np.max(Aeff)
 
-if args.pl == 1:
-    norm_factor = 1.552
-elif args.pl == 2:
-    norm_factor = 2.274
-else:
-    norm_factor = 1.0
+# if args.pl == 1:
+#     norm_factor = 1.552
+# elif args.pl == 2:
+#     norm_factor = 2.274
+# else:
+#     norm_factor = 1.0
 
-mu_samples = []
-muW025_samples = []
-muW05_samples = []
-muW075_samples = []
-muW1_samples = []
-muW125_samples = []
-muW15_samples = []
-muW175_samples = []
-muW2_samples = []
+# mu_samples = []
+# muW025_samples = []
+# muW05_samples = []
+# muW075_samples = []
+# muW1_samples = []
+# muW125_samples = []
+# muW15_samples = []
+# muW175_samples = []
+# muW2_samples = []
 
-chunks = []
-for _ in range(args.pl_draws):
-    # muW1_err_bootstrap = []
-    # muW_err_bootstrap = []
-    # mu_err_bootstrap = []
-    anglesE = []
-    angles_momE = []
-    momsE = []
-    errorsE = [] 
-    energies_simE = []
-    angles_simE = []
+# chunks = []
+# for _ in range(args.pl_draws):
+#     # muW1_err_bootstrap = []
+#     # muW_err_bootstrap = []
+#     # mu_err_bootstrap = []
+#     anglesE = []
+#     angles_momE = []
+#     momsE = []
+#     errorsE = [] 
+#     energies_simE = []
+#     angles_simE = []
 
-    for i,e in enumerate(E[:]):
-        if e * (8.2 - 1.8) + 1.8 <= args.E[1] and e * (8.2 - 1.8) + 1.8 >= args.E[0]:
-            print(e * (8.2 - 1.8) + 1.8)
-            cut = (angles_sim[:,0] != 0) * (e == energies_sim[:,0])
-            if args.flat:
-                pl_factor = int(np.sum(cut) * (e * (8.2 - 1.8) + 1.8)**(-args.pl) * 0.95)
-            else:
-                pl_factor = int(np.sum(cut) * (e * (8.2 - 1.8) + 1.8)**(-args.pl) * norm_factor**2  * Aeff[i])
-            #pl_factor = int(np.sum(cut))
-            idx = np.random.choice(np.arange(np.sum(cut)), pl_factor, replace=False)
-            anglesE.append(angles[cut,:][idx,:])
-            angles_momE.append(angles_mom[:,0][cut][idx]) 
-            momsE.append(moms[:,0][cut][idx]) 
-            errorsE.append(errors[cut,:][idx,:] )
-            energies_simE.append(energies_sim[:,0][cut][idx])
-            angles_simE.append(angles_sim[:,0][cut][idx])
+#     for i,e in enumerate(E[:]):
+#         if e * (8.2 - 1.8) + 1.8 <= args.E[1] and e * (8.2 - 1.8) + 1.8 >= args.E[0]:
+#             print(e * (8.2 - 1.8) + 1.8)
+#             cut = (angles_sim[:,0] != 0) * (e == energies_sim[:,0])
+#             if args.flat:
+#                 pl_factor = int(np.sum(cut) * (e * (8.2 - 1.8) + 1.8)**(-args.pl) * 0.95)
+#             else:
+#                 pl_factor = int(np.sum(cut) * (e * (8.2 - 1.8) + 1.8)**(-args.pl) * norm_factor**2  * Aeff[i])
+#             #pl_factor = int(np.sum(cut))
+#             idx = np.random.choice(np.arange(np.sum(cut)), pl_factor, replace=False)
+#             anglesE.append(angles[cut,:][idx,:])
+#             angles_momE.append(angles_mom[:,0][cut][idx]) 
+#             momsE.append(moms[:,0][cut][idx]) 
+#             errorsE.append(errors[cut,:][idx,:] )
+#             energies_simE.append(energies_sim[:,0][cut][idx])
+#             angles_simE.append(angles_sim[:,0][cut][idx])
         
-    print("Total number of tracks >> ",np.concatenate(anglesE).ravel().shape[0] / 14)
+#     print("Total number of tracks >> ",np.concatenate(anglesE).ravel().shape[0] / 14)
 
-    n_cpu = os.cpu_count()
-    print("Beginning parallelization on {} cores\n".format(n_cpu))
-    chunks += [np.random.choice(np.arange(len(np.concatenate(angles_momE).ravel())),len(np.concatenate(angles_momE).ravel()), replace=True) for _ in range(args.B)]
+#     n_cpu = os.cpu_count()
+#     print("Beginning parallelization on {} cores\n".format(n_cpu))
+#     chunks += [np.random.choice(np.arange(len(np.concatenate(angles_momE).ravel())),len(np.concatenate(angles_momE).ravel()), replace=True) for _ in range(args.B)]
 
-    def sub(idxs):
-        A1 = (np.concatenate(anglesE)[idxs].ravel(), np.concatenate(angles_momE).ravel()[idxs], np.concatenate(angles_simE).ravel()[idxs],
-        np.concatenate(momsE).ravel()[idxs], np.concatenate(errorsE)[idxs].ravel(), [None], [None], [None], [None], 
-        np.concatenate(energies_simE).ravel()[idxs],angles1,errors1,[None])
-        mu1, _, _, _ = t.fit_mod(A1, method='stokes')
-        mu2, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=0.25)
-        mu3, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=0.5)
-        mu4, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=0.75)
-        mu5, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1)
-        mu6, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1.25)
-        mu7, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1.5)
-        mu8, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1.75)
-        mu9, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=2)
-        return mu1, mu2, mu3, mu4, mu5, mu6, mu7, mu8, mu9 
+#     def sub(idxs):
+#         A1 = (np.concatenate(anglesE)[idxs].ravel(), np.concatenate(angles_momE).ravel()[idxs], np.concatenate(angles_simE).ravel()[idxs],
+#         np.concatenate(momsE).ravel()[idxs], np.concatenate(errorsE)[idxs].ravel(), [None], [None], [None], [None], 
+#         np.concatenate(energies_simE).ravel()[idxs],angles1,errors1,[None])
+#         mu1, _, _, _ = t.fit_mod(A1, method='stokes')
+#         mu2, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=0.25)
+#         mu3, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=0.5)
+#         mu4, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=0.75)
+#         mu5, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1)
+#         mu6, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1.25)
+#         mu7, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1.5)
+#         mu8, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=1.75)
+#         mu9, _, _, _ = t.fit_mod(A1, method='weighted_MLE', error_weight=2)
+#         return mu1, mu2, mu3, mu4, mu5, mu6, mu7, mu8, mu9 
 
-    with mp.Pool(processes=n_cpu) as pool:
-        results = pool.map(sub, chunks)
-    print("DONE!")
-    mu_err_bootstrap, muW025_err_bootstrap, muW05_err_bootstrap, muW075_err_bootstrap, muW1_err_bootstrap, muW125_err_bootstrap, muW15_err_bootstrap, muW175_err_bootstrap, muW2_err_bootstrap = zip(*results)
-    mu_samples += mu_err_bootstrap
-    muW025_samples += muW025_err_bootstrap
-    muW05_samples += muW05_err_bootstrap
-    muW075_samples += muW075_err_bootstrap
-    muW1_samples += muW1_err_bootstrap
-    muW125_samples += muW125_err_bootstrap
-    muW15_samples += muW15_err_bootstrap
-    muW175_samples += muW175_err_bootstrap
-    muW2_samples += muW2_err_bootstrap
+#     with mp.Pool(processes=n_cpu) as pool:
+#         results = pool.map(sub, chunks)
+#     print("DONE!")
+#     mu_err_bootstrap, muW025_err_bootstrap, muW05_err_bootstrap, muW075_err_bootstrap, muW1_err_bootstrap, muW125_err_bootstrap, muW15_err_bootstrap, muW175_err_bootstrap, muW2_err_bootstrap = zip(*results)
+#     mu_samples += mu_err_bootstrap
+#     muW025_samples += muW025_err_bootstrap
+#     muW05_samples += muW05_err_bootstrap
+#     muW075_samples += muW075_err_bootstrap
+#     muW1_samples += muW1_err_bootstrap
+#     muW125_samples += muW125_err_bootstrap
+#     muW15_samples += muW15_err_bootstrap
+#     muW175_samples += muW175_err_bootstrap
+#     muW2_samples += muW2_err_bootstrap
 
-if args.pl_draws:
-    np.save("bootstrapSPL{}_draws{}_dist_flat{}_range{}_{}".format(args.pl, args.pl_draws, int(args.flat), args.E[0], args.E[1]), (mu_samples, muW025_samples, muW05_samples, muW075_samples, 
-                                                                                                                                    muW1_samples, muW125_samples, muW15_samples, muW175_samples, muW2_samples) )
-else:
-    np.save("bootstrapPL{}_dist".format(args.pl), (muW1_samples, muW_samples, mu_samples) )
+# if args.pl_draws:
+#     np.save("bootstrapSPL{}_draws{}_dist_flat{}_range{}_{}".format(args.pl, args.pl_draws, int(args.flat), args.E[0], args.E[1]), (mu_samples, muW025_samples, muW05_samples, muW075_samples, 
+#                                                                                                                                     muW1_samples, muW125_samples, muW15_samples, muW175_samples, muW2_samples) )
+# else:
+#     np.save("bootstrapPL{}_dist".format(args.pl), (muW1_samples, muW_samples, mu_samples) )
 
 
 

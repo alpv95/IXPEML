@@ -8,7 +8,7 @@ import argparse
 from util.definitions import ensembles
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--ensemble', type=str,choices=["pol_only","pol_abs_E", "bigE"],
+parser.add_argument('--ensemble', type=str,choices=["pol_only","pol_abs_E", "bigE", "flat", "pl1_small","pl1_weight","flat_weight","flat_weight_test"],
                     help='Which network ensemble to use: Ensemble prediction or single prediction')
 parser.add_argument('--plot', action='store_true',
                     help='Whether to plot histograms and modulation curves')
@@ -51,7 +51,7 @@ def main(**kwargs):
         print("Evaluating models: \n", model_list)
         net_list = []
 
-        extensionsToCheck = ["141",'131','121','111','101','91','71','51']
+        extensionsToCheck = ["191","171","151",'131','111','91']
         for model in model_list:
             nets = os.listdir(os.path.abspath(os.path.join("data/nn/", model)))
             for net in nets:

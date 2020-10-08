@@ -48,12 +48,12 @@ class H5Dataset(Dataset):
                 self.angles = self.angles.numpy()              
                 self.angles = np.arctan2(self.angles[:,:,1], self.angles[:,:,0])
                 self.angles = torch.from_numpy( np.digitize((180 / np.pi) * self.angles + 180, bins=np.linspace(60,360.01,6) ) )
-            elif (losstype == "mserrall1"):
+            elif (losstype == "mserrall1" or losstype == "mserrall2"):
                 self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
                                 self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
-            elif (losstype == "mserrall2"):
-                self.angles = torch.stack((torch.cos(2*self.angles),torch.sin(2*self.angles), torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
-                                self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
+            # elif (losstype == "mserrall2"):
+            #     self.angles = torch.stack((torch.cos(2*self.angles),torch.sin(2*self.angles), torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
+            #                     self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
             elif (losstype == "mserr"):
                 self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
         else:

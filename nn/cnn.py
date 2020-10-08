@@ -132,7 +132,7 @@ def TrackNet(pixels, hparams=None, params=None):
     else:
         hparams = {**hparams_, **hparams}
 
-    return ResNet(BasicBlock, [2,2,2,2], hparams['outputtype'], hparams['dropout'], hparams['input_channels'])
+    return ResNet(BasicBlock, [1,1,1,1], hparams['outputtype'], hparams['dropout'], hparams['input_channels'])
 
 
 class TrackAngleRegressor:
@@ -217,8 +217,8 @@ class TrackAngleRegressor:
                             Z=hparams['Z'], lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
             val_criterion = cnn_loss.MSErrLossAll2(size_average=False, alpha=hparams['alpha_loss'], 
                             Z=hparams['Z'],lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
-            label_number = 7
-            hparams['outputtype'] = '7pos2err'
+            label_number = 5
+            hparams['outputtype'] = '5pos1err'
         elif losstype == 'mserr':
             criterion = cnn_loss.MSErrLoss(alpha=hparams['alpha_loss'], Z=hparams['Z'])
             val_criterion = cnn_loss.MSErrLoss(size_average=False, alpha=hparams['alpha_loss'], Z=hparams['Z'])
