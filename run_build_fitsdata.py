@@ -54,24 +54,174 @@ args = parser.parse_args()
 
 
 # Specify options for datasets and their input -> output properties
-#   Each row is a dataset: (name, energy, polarization, type: sim/meas)
 # The output file is constructed from each row's name+type
 Dataset = namedtuple('Dataset', ['name', 'energy', 'angle', 'pol', 'type'])
 
-def main(**kwargs):
-    # Set RNG seeds for consistency
-    input_base = kwargs['input_base']
-    out_base = kwargs['out_base']
-    Erange = kwargs['Erange']
-    fraction = kwargs['fraction']
-    pl = kwargs['pl']
-    meas = kwargs['meas']
-    meas_tot = kwargs['meas_tot']
-    meas_e = kwargs['meas_e']
-    # Settings for dense square pixels
-    augment = kwargs['augment']
-    shift = kwargs['shift']
-    n_pixels = kwargs['npix']
+
+# class builder(object):
+#     in_base = args.input_base
+#     out_base = args.out_base
+#     n_pixels = args.npix
+#     augment = args.augment
+#     shift = args.shift
+#     pl = args.pl
+
+#     def __init__(self, datasets, total):
+#         self.total = total
+#         self.datasets = datasets
+
+#         tracks_cum = []
+#         mom_phis_cum = torch.zeros( (self.total, self.augment) ) 
+#         moms_cum = torch.zeros( self.total, self.augment )
+#         mom_abs_cum = torch.zeros( (self.total, self.augment, self.shift, 2) )
+#         xy_abs_cum = torch.zeros( (self.total, 2) ) #xy location of track on detector grid
+#         self.build_result = [tracks_cum, mom_phis_cum, moms_cum, mom_abs_cum, xy_abs_cum]
+
+#     def init_build(self, input_file, pulse_cut):
+#         with fits.open(input_file, memmap=False) as hdu:
+#             data = hdu[1].data
+        
+#         #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
+#         cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
+#         if pulse_cut:
+#             (mu,sigma) = norm.fit(data['PI'])
+#             cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
+#         return data, cut
+
+#     def save(self, split, split_func):
+#         N_final = len(self.build_result[0])
+#         indxs = split_func(np.arange(N_final), fracs=split)
+
+#         for indx, save_file in zip(indxs,files):
+#             tracks_cum_save = [torch.from_numpy(self.build_result[0][idx]) for idx in indx]
+#             with open(save_file + "tracks_full.pickle", "wb") as f:
+#                 pickle.dump(tracks_cum_save, f)
+#             torch.save( [result[indx] for result in self.build_result], save_file + "labels_full.pt" )
+#             print("Saved, ", save_file )
+        
+#         return indxs[0]
+
+
+# class simulated(builder):
+#     def __init__(self):
+#         super().__init__()
+#         try:
+#             # Create results Directory
+#             os.makedirs(os.path.join(self.out_base,'train/'))
+#             os.makedirs(os.path.join(self.out_base,'val/'))
+#             os.makedirs(os.path.join(self.out_base,'test/'))
+#             print("Directory Created for Simulated data") 
+#         except FileExistsError:
+#             print("Directory already exists for Simulated")
+
+#         sq_output_file_train = os.path.join(self.out_base,'train/') 
+#         sq_output_file_val = os.path.join(self.out_base,'val/') 
+#         sq_output_file_test = os.path.join(self.out_base,'test/') 
+
+#         angles_cum = torch.zeros( (self.total, self.augment) )
+#         abs_cum = torch.zeros( (self.total, self.augment, self.shift, 2) )
+#         energy_cum = torch.zeros( self.total, self.augment )
+#         z_cum = torch.zeros( self.total, self.augment )
+#         self.build_result.extend([angles_cum, abs_cum, energy_cum, z_cum])
+
+#     def build(self, pulse_cut):
+#         cur_idx = 0
+#         for dataset in self.datasets:
+#             print('Building dataset for {name} {energy} keV {angle} deg {type}'.format(**dataset._asdict()))
+#             energy_str = '{:.1f}'.format(dataset.energy).replace('.', 'p')
+#             input_file = os.path.join(self.in_base, '{}_{}{}_recon.fits'.format(dataset.name, 
+#                                                                         angle_str, energy_str))
+#             n_train_final = int(dataset.energy**(-self.pl) * 3070000 * fraction * aeff(dataset.energy))
+
+#             data, cut = super().init_build(input_file, pulse_cut)
+#             with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
+#                 sim_data = hdu[3].data
+#             cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
+
+#             moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+#             Zs = sim_data['ABS_Z'][cut]
+#             mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
+#             bars = np.column_stack((data['BARX'],data['BARY']))[cut]
+#             abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
+#             hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
+#                                             sim_data['PE_PHI'][cut], abs_pts, moms, data['DETPHI'][cut], 
+#                                             mom_abs_pts, bars)
+#             hex_tracks = hex_tracks[np.arange(n_train_final)]
+
+#             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
+
+#             self.build_result[0].extend(tracks)
+#             self.build_result[5][cur_idx : (cur_idx + n_train_final)] = angles 
+#             self.build_result[1][cur_idx : (cur_idx + n_train_final)] = mom_phis
+#             self.build_result[2][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
+#             self.build_result[6][cur_idx : (cur_idx + n_train_final)] = abs_pts 
+#             self.build_result[3][cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
+#             self.build_result[7][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
+#             self.build_result[4][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_abs_pt)
+#             self.build_result[8][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(Zs * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
+
+#             cur_idx += n_train_final
+
+
+#     def save(self, split, split_func):
+#         train_inds = super().save(split, split_func)
+
+#         train_meanE = torch.mean(self.build_result[7][train_inds], dim=0)
+#         train_stdE = torch.std(self.build_result[7][train_inds], dim=0)
+#         train_mean, train_std = sparse_mean(self.build_result[0], self.n_pixels)
+#         torch.save( (train_mean, train_std), os.path.join(self.out_base,'train/ZN.pt'))
+#         torch.save( (train_meanE, train_stdE), os.path.join(self.out_base,'train/ZNE.pt'))
+
+
+# class measured(builder):
+#     def __init__(self):
+#         super().__init__()
+#         try:
+#             # Create results Directory
+#             os.makedirs(os.path.join(self.out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)))
+#             os.makedirs(os.path.join(self.out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)))
+#             print("Directory Created ") 
+#         except FileExistsError:
+#             print("Directory already exists")
+        
+#         sq_output_file_train = os.path.join(self.out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)) 
+#         sq_output_file_test = os.path.join(self.out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol))
+
+#     def build(self, meas_file, pulse_cut):
+#         input_file = os.path.join(self.in_base, meas_file)
+#         data, cut = super().init_build(input_file, pulse_cut)
+
+#         moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+#         mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
+#         bars = np.column_stack((data['BARX'],data['BARY']))[cut]
+#         hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
+#                                          moms, data['DETPHI'][cut], mom_abs_pts, bars) 
+
+#         hex_tracks = hex_tracks[np.arange(self.total)]
+                    
+#         tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
+
+#         self.build_result[0].extend(tracks)
+#         self.build_result[1][:self.total] = mom_phis.unsqueeze(1)
+#         self.build_result[2][:self.total] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
+#         self.build_result[3][:self.total] = mom_abs_pts 
+#         self.build_result[4][:self.total] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
+
+
+
+# def main():
+#     input_base, out_base, augment, shift, n_pixels, Erange, \
+#     fraction, pl, aeff, meas, meas_tot, meas_e, pulse, shuffle = args
+#     # meas dataset 2-way vt split
+#     meas_split = (0.9, 0.1)
+#     # sim dataset 3-way tvt split
+#     sim_split = (0.9, 0.05, 0.05)
+
+
+def main():
+    input_base, out_base, augment, shift, n_pixels, Erange, \
+    fraction, pl, aeff_on, meas, meas_tot, meas_e, pulse_cut, shuffle = args.input_base, args.out_base, args.augment, args.shift, args.npix, args.Erange, \
+    args.fraction, args.pl, args.aeff, args.meas, args.meas_tot, args.meas_e, args.pulse_cut, args.shuffle
     print("out_base: ", out_base)
 
     # meas dataset 2-way vt split
@@ -79,7 +229,7 @@ def main(**kwargs):
     # sim dataset 3-way tvt split
     sim_split = (0.9, 0.05, 0.05)
 
-    if kwargs['aeff']:
+    if aeff_on:
         aeff = lambda E: Aeff(E)
     else:
         aeff = lambda E: 1
@@ -143,15 +293,14 @@ def main(**kwargs):
             dataset.name, angle_str, energy_str
            ))
         else: 
-           input_file = os.path.join(input_base, kwargs["meas"])
-
+           input_file = os.path.join(input_base, meas)
 
         with fits.open(input_file, memmap=False) as hdu:
             data = hdu[1].data
         
         #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
-        cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
-        if args.pulse_cut:
+        cut = (abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3) * (data['NUM_CLU'] > 0)
+        if pulse_cut:
             (mu,sigma) = norm.fit(data['PI'])
             cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
 
@@ -181,7 +330,7 @@ def main(**kwargs):
             else:
                 n_train_final = int(dataset.energy**(-pl) * 3070000 * fraction * aeff(dataset.energy)) 
             
-            if args.shuffle:
+            if shuffle:
                 #randomly select subset
                 hex_tracks = expand_tracks(hex_tracks, n_train_final)
             else:
@@ -213,7 +362,7 @@ def main(**kwargs):
 
         elif dataset.type == 'meas':
             # Split 2 ways
-            if args.shuffle:
+            if shuffle:
                 #randomly select subset
                 hex_tracks = expand_tracks(hex_tracks, total)
             else:
@@ -223,7 +372,6 @@ def main(**kwargs):
             tot_tracks = hex_tracks.n_tracks
 
             try:
-                # Create results Directory
                 os.makedirs(os.path.join(out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)))
                 os.makedirs(os.path.join(out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)))
                 print("Directory Created ") 
@@ -249,7 +397,7 @@ def main(**kwargs):
     #Save data in torch pt file
     if dataset.type == 'sim':
         N_final = len(tracks_cum) #tracks_cum.shape[0]
-        if args.shuffle:
+        if shuffle:
             print("Shuffling") #Note: NEED shuffling for unpolarized (simulated) dataset
             train_inds, val_inds, test_inds = tvt_random_split(np.arange(N_final), fracs=sim_split)
         else:
@@ -303,7 +451,6 @@ def main(**kwargs):
 
 
 if __name__ == '__main__':
-    main(input_base=args.input_base, out_base=args.out_base, meas=args.meas, meas_tot=args.meas_tot, meas_e=args.meas_e, augment=args.augment,
-        shift=args.shift, Erange=args.Erange, fraction=args.fraction, pl=args.pl, npix=args.npix, aeff=args.aeff)
+    main()
 
 
