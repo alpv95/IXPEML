@@ -38,22 +38,19 @@ def hex2square_sub(hex_track, n_pixels, augment, shift):
     
     mom_abs_pt_aug = np.empty(2)
     mom_abs_pts_sq = np.zeros((augment, shift, 2)) 
-    #tracks_cube = np.zeros((augment, shift, n_pixels, n_pixels), dtype=np.int16)  # tracks in square coords   
 
     xs = cp.copy(hex_track.x)
     ys = cp.copy(hex_track.y)
     Qs = cp.copy(hex_track.Q)
 
-    ys = ys[np.isfinite(ys)] #- np.nanmin(hex_track.y)
-    xs = xs[np.isfinite(xs)] #- np.nanmin(hex_track.x)
+    ys = ys[np.isfinite(ys)] 
+    xs = xs[np.isfinite(xs)] 
     Qs = Qs[Qs != -1]
     tracks_cube = np.zeros((augment, shift, 3, len(Qs)), dtype=np.int16)
 
     mom = cp.copy(hex_track.mom)
     mom_phi = cp.copy(hex_track.mom_phi)
     mom_abs_pt = cp.copy(hex_track.mom_abs_pt)
-    #mom_abs_pt[0] -= np.nanmin(hex_track.x)
-    #mom_abs_pt[1] -= np.nanmin(hex_track.y)
 
     if sim:
         abs_pt = cp.copy(hex_track.absorption_point)
@@ -103,10 +100,16 @@ def hex2square_sub(hex_track, n_pixels, augment, shift):
         Q_square = np.zeros((n_pixels,n_pixels))
         bol = (i<n_pixels) * (j<n_pixels) #square crop to n_pixel size, a minority of high energy tracks will be sliced 
         Q_square[j[bol].astype(np.int),i[bol].astype(np.int)] = Qs[bol]
-        indices = np.where(Q_square != 0)#sparse representation, hopefully doesnt slow down training
+        indices = np.where(Q_square != 0)#sparse representation
         values = Q_square[indices]
-        tracks_cube[k, 0, :, :] = np.stack([*indices,values])#Q_square
-        
+        try:
+            tracks_cube[k, 0, :, :] = np.stack([*indices,values])#Q_square
+        except ValueError:
+            missing_lenth = len(Qs) - len(values)
+            indices = np.concatenate((indices, (n_pixels-1)*np.ones((2, missing_lenth))),axis=1)
+            values = np.concatenate((values, np.zeros(missing_lenth)), axis=0)
+            tracks_cube[k, 0, :, :] = np.stack([*indices,values])#Q_square
+
         if shift > 1:
             xs_aug_shift = np.where(np.mod(np.round((ys_aug - ys_aug.min())/(1.5*a)),2)==0, xs_aug+r, xs_aug) #(np.round(ys_aug,5) - 0.45465)/(1.5*a)),2)==1, xs_aug+r, xs_aug)
             j,i = np.round((ys_aug-ys_aug.min()) / (1.5*a)), np.round(((xs_aug_shift-xs_aug_shift.min())) / (2*r))
@@ -117,9 +120,15 @@ def hex2square_sub(hex_track, n_pixels, augment, shift):
             Q_square = np.zeros((n_pixels,n_pixels))
             bol = (i<n_pixels) * (j<n_pixels) #square crop to n_pixel size, a minority of high energy tracks will be sliced 
             Q_square[j[bol].astype(np.int),i[bol].astype(np.int)] = Qs[bol]
-            indices = np.where(Q_square != 0)#sparse representation, hopefully doesnt slow down training
+            indices = np.where(Q_square != 0)#sparse representation
             values = Q_square[indices]
-            tracks_cube[k, 1, :, :] = np.stack([*indices,values]) #Q_square
+            try:
+                tracks_cube[k, 1, :, :] = np.stack([*indices,values])#Q_square
+            except ValueError:
+                missing_lenth = len(Qs) - len(values)
+                indices = np.concatenate((indices, (n_pixels-1)*np.ones((2, missing_lenth))),axis=1)
+                values = np.concatenate((values, np.zeros(missing_lenth)), axis=0)
+                tracks_cube[k, 1, :, :] = np.stack([*indices,values])#Q_square
 
     if sim:
         return tracks_cube, angles_sq, abs_pts_sq, mom_phis_sq, mom_abs_pts_sq
@@ -158,132 +167,3 @@ def hex2square(hex_tracks, n_pixels, augment=3, shift=2):# tracks_cum=None, angl
        return tracks_cum, angles_cum, mom_phi_cum, abs_pts_cum, mom_abs_pts_cum
     else:
        return tracks_cum, mom_phi_cum, mom_abs_pts_cum
-
-
-# def sparse_hex_to_dense_square(hex_tracks, n_pixels, pitch, interp_method='linear', expand=True, n_cores=1):
-#     """Convert to form ready for machine learning/deep neural nets and image processing
-
-#     Angles and absorption points aren't changed by the conversion - but the dense tracks will need to be converted
-#         back to coords using their centroids. So save the centroids for everything.
-
-#     Note: The internals of the interpolation code also seem to be multithreaded (in an extension module) so it may not
-#         be worth running with even more parallelism. However, this process is still slow.
-
-#     Args:
-#         hex_tracks: SparseHexTracks (or SparseHexSimTracks) tracks object
-#         n_pixels: int, number of pixels width and height
-#         pitch: double, spacing between pixel centers
-#         interp_method: str, griddata's interpolation method. 'linear' seems to work well. Other methods like 'nearest'
-#             may require more
-#         expand: bool, whether to add dummy 0 points to allow proper interpolation with a compacted (0's removed)
-#             sparse hex source. Default is True because the loading function that run before this set compact=True.
-#         n_cores: int, number of cores to run in parallel. Default is 1.
-#     """
-#     # Split tracks among cores
-#     n_tracks = hex_tracks.n_tracks
-#     splits = np.array_split(np.arange(n_tracks), n_cores)
-
-#     # Run in parallel
-#     #with multiprocessing.Pool(processes=n_cores) as pool:
-#         #results = pool.starmap(sparse_hex_to_dense_square_sub, [(hex_tracks[split], n_pixels, pitch, interp_method, expand) for split in splits])
-#     #Run in a single process
-#     results = sparse_hex_to_dense_square_sub(hex_tracks, n_pixels,pitch, interp_method, expand)
-
-#     # Combine
-#     #if hasattr(hex_tracks, 'angles') and hasattr(hex_tracks, 'absorption_points'):
-#         #square_tracks = DenseSquareSimTracks.combine(results)
-#     #else:
-#         #square_tracks = DenseSquareTracks.combine(results)
-#     square_tracks = results
-
-#     return square_tracks
-
-
-# def sparse_hex_to_dense_square_sub(hex_tracks, n_pixels, pitch, interp_method='linear', expand=True):
-#     sim = False
-#     if hasattr(hex_tracks, 'angles') and hasattr(hex_tracks, 'absorption_points'):
-#         sim = True
-
-#     n_tracks = hex_tracks.n_tracks
-#     centroids = np.zeros((n_tracks, 2), dtype=np.float32)
-#     n_pixels_half = int((n_pixels - 1) / 2)  # the number of pixels out from the center
-#     tracks_cube = np.zeros((n_tracks, n_pixels, n_pixels), dtype=np.int16)  # tracks in square coords
-#     for i_track, hex_track in enumerate(hex_tracks):
-#         if i_track % 1000 == 0:
-#             print('Interpolating track {}'.format(i_track))
-
-#         xs = hex_track.x
-#         ys = hex_track.y
-#         Qs = hex_track.Q
-
-#         # Dev/debug: Show starting hex
-#         # plt.figure()
-#         # plt.scatter(xs, ys, Qs)
-#         # plt.axis('equal')
-#         # plt.title('Hex {}'.format(i_track))
-#         # plt.show()
-
-#         # Do square grid conversion
-#         # Calculate centroid
-#         x0, y0 = sparse_weighted_centroid(xs, ys, Qs)
-
-#         # Build square grid
-#         x_square_ = np.linspace(x0 - n_pixels_half * pitch, x0 + n_pixels_half * pitch, n_pixels)
-#         y_square_ = np.linspace(y0 - n_pixels_half * pitch, y0 + n_pixels_half * pitch, n_pixels)
-#         x_square, y_square = np.meshgrid(x_square_, y_square_)
-
-#         # Prep for interpolation by assigning 0 points outside the main "cluster"
-#         #   Doing this here saves us from having to keep around all the grid 0's in the hex sparse datasets - but at the
-#         #   cost of some imprecision here
-#         if expand:
-#             xy, Qs = add_zero_grid(xs, ys, Qs, x0, y0, n_pixels_half*pitch, n_pixels)  # n_pixels*2+1
-#         else:
-#             xy = np.column_stack((xs, ys))
-
-#         # Do interpolation
-#         Q_square = griddata(xy, Qs, (x_square, y_square), method=interp_method, fill_value=0).squeeze()
-
-#         # Dev/debug: Show ending square interpolated
-#         # plt.figure()
-#         # plt.scatter(x_square.reshape(-1, 1), y_square.reshape(-1, 1), Q_square.reshape(-1,1))
-#         # plt.axis('equal')
-#         # plt.title('Square {}'.format(i_track))
-#         # plt.show()
-
-#         tracks_cube[i_track, :, :] = Q_square
-#         centroids[i_track, :] = [x0, y0]
-
-#     if sim:
-#         square_tracks = DenseSquareSimTracks(tracks_cube, centroids, pitch, hex_tracks.angles, hex_tracks.absorption_points)
-#     else:
-#         square_tracks = DenseSquareTracks(tracks_cube, centroids, pitch)
-#     return square_tracks
-
-
-# def add_zero_grid(xs, ys, Qs, x0, y0, dist_half, n_pixels):
-#     """Add a bunch of 0 points on a grid to the supplied (xs,ys) actual points. These are used for interpolation -
-#     making sure points outside the cluster are 0.
-#     Note/TODO: This is sort of an expensive way of doing this, especially the pairwise calcs
-#     """
-#     # Build fine grid - nominally matches the grid size that will be used for the interpolation
-#     x_square_ = np.linspace(x0 - dist_half, x0 + dist_half, n_pixels)
-#     y_square_ = np.linspace(y0 - dist_half, y0 + dist_half, n_pixels)
-#     x_square, y_square = np.meshgrid(x_square_, y_square_)
-
-#     # Make xy points
-#     x = x_square.reshape(-1)
-#     y = y_square.reshape(-1)
-#     xy0 = np.column_stack((x, y))
-#     xy = np.column_stack((xs, ys))
-
-#     # Points close to any original point are close; others are far - keep the far points
-#     D = pairwise_distances(xy, xy0)  # euclidean distance by default
-#     d_cutoff = 0.07  # mm, same as dbscan neighbor cutoff
-#     far = D > d_cutoff
-#     keep = np.all(far, axis=0)
-#     xy0 = xy0[keep, :]
-
-#     # Assemble augmented cluster+0 points
-#     xy = np.concatenate((xy, xy0), axis=0)
-#     Q = np.concatenate((Qs, np.zeros((xy0.shape[0]))))
-#     return xy, Q
