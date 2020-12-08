@@ -195,7 +195,7 @@ class SparseHexTrack:
 class SparseHexSimTracks(SparseHexTracks):
     """SparseHexTracks augmented with simulation-only data."""
 
-    def __init__(self, xs, ys, Qs, angles, absorption_points, moms, mom_phis, mom_abs_pts, bars):
+    def __init__(self, xs, ys, Qs, angles, absorption_points, moms, mom_phis, mom_abs_pts, bars, zs):
         """Construct augmented sparse hex tracks
 
         Args:
@@ -209,6 +209,9 @@ class SparseHexSimTracks(SparseHexTracks):
 
         assert absorption_points.shape[0] == self.n_tracks
         self.absorption_points = absorption_points
+
+        assert zs.shape[0] == self.n_tracks
+        self.zs = zs
 
     def __getitem__(self, i):
         """Gets a single SparseHexSimTrack of the specified index i or a new SparseHexSimTracks of the specified indexes
@@ -226,7 +229,8 @@ class SparseHexSimTracks(SparseHexTracks):
             bars = self.bar[i,:]
             angles = self.angles[i]
             absorption_points = self.absorption_points[i, :]
-            return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points, moms, mom_phis, mom_abs_pts, bars)
+            zs = self.zs[i]
+            return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points, moms, mom_phis, mom_abs_pts, bars, zs)
 
         # Single integer index and iteration returns a single value
         if i == self.n_tracks:
@@ -235,7 +239,7 @@ class SparseHexSimTracks(SparseHexTracks):
         x = self.x[i, :n]
         y = self.y[i, :n]
         Q = self.Q[i, :n]
-        return SparseHexSimTrack(x, y, Q, self.angles[i], self.absorption_points[i, :], self.mom[i], self.mom_phi[i], self.mom_abs_pt[i,:], self.bar[i,:])
+        return SparseHexSimTrack(x, y, Q, self.angles[i], self.absorption_points[i, :], self.mom[i], self.mom_phi[i], self.mom_abs_pt[i,:], self.bar[i,:], self.zs[i])
 
     def save(self, filename=None, f=None):
         """Save to HDF5 file. Either specify a filename to save a single object or f to save multiple objects"""
@@ -253,11 +257,11 @@ class SparseHexSimTracks(SparseHexTracks):
         if f is None:
             with h5py.File(filename, 'r') as f:
                 x, y, Q, n_tracks, n_pixels = _load_tracks(f)
-                angles, absorption_points = _load_tracks_sim(f)
+                angles, absorption_points, zs = _load_tracks_sim(f)
         else:
             x, y, Q, n_tracks, n_pixels = _load_tracks(f)
-            angles, absorption_points = _load_tracks_sim(f)
-        return SparseHexSimTracks(x, y, Q, angles, absorption_points)
+            angles, absorption_points, zs = _load_tracks_sim(f)
+        return SparseHexSimTracks(x, y, Q, angles, absorption_points, zs)
 
     @staticmethod
     def combine(hex_tracks):
@@ -268,16 +272,19 @@ class SparseHexSimTracks(SparseHexTracks):
             ys = []
             Qs = []
             angles = []
+            zs = []
             absorption_points = []
             for hex_track in hex_tracks:
                 xs.append(hex_track.x)
                 ys.append(hex_track.y)
                 Qs.append(hex_track.Q)
                 angles.append(hex_track.angle)
+                zs.append(hex_track.z)
                 absorption_points.append(hex_track.absorption_point)
             angles = np.array(angles)
+            zs = np.array(zs)
             absorption_points = np.array(absorption_points)
-            return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points)
+            return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points, zs)
         elif isinstance(hex_tracks[0], SparseHexSimTracks):
             # Directly work with ndarrays - faster than converting to individual tracks above
             n_tracks = np.sum([tracks.Q.shape[0] for tracks in hex_tracks])
@@ -286,6 +293,7 @@ class SparseHexSimTracks(SparseHexTracks):
             ys = np.zeros_like(xs)
             Qs = np.zeros((n_tracks, max_pixels), dtype=np.int16)
             angles = np.zeros((n_tracks,), dtype=np.float32)
+            zs = np.zeros((n_tracks,), dtype=np.float32)
             absorption_points = np.zeros((n_tracks, 3), dtype=np.float32)
             xs[:] = np.nan
             ys[:] = np.nan
@@ -298,6 +306,7 @@ class SparseHexSimTracks(SparseHexTracks):
                 ys[i_start:i_stop, :n_pixel] = tracks.y
                 Qs[i_start:i_stop, :n_pixel] = tracks.Q
                 angles[i_start:i_stop] = tracks.angles
+                zs[i_start:i_stop] = tracks.zs
                 absorption_points[i_start:i_stop, :] = tracks.absorption_points
                 i_start = i_stop
             return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points)
@@ -308,11 +317,12 @@ class SparseHexSimTracks(SparseHexTracks):
 class SparseHexSimTrack(SparseHexTrack):
     """SparseHexTrack augmented with simulation-only data."""
 
-    def __init__(self, x, y, Q, angle, absorption_point, mom, mom_phi, mom_abs_pt, bar):
+    def __init__(self, x, y, Q, angle, absorption_point, mom, mom_phi, mom_abs_pt, bar, z):
         super().__init__(x, y, Q, mom, mom_phi, mom_abs_pt, bar)
 
         self.angle = angle
         self.absorption_point = absorption_point
+        self.z = z
 
 
 def _save_tracks(tracks, f):
@@ -330,6 +340,7 @@ def _save_tracks_sim(tracks, f):
     """Helper function for saving additional sim fields"""
     opts = {'compression': 'gzip'}
     f.create_dataset('angles', data=tracks.angles, **opts)
+    f.create_dataset('zs', data=tracks.zs, **opts)
     f.create_dataset('absorption_points', data=tracks.absorption_points, **opts)
     f.attrs['class'] = 'SparseHexSimTracks'
 
@@ -347,5 +358,6 @@ def _load_tracks(f):
 def _load_tracks_sim(f):
     """Helper function for loading additional sim fields"""
     angles = f['angles'][...]
+    zs = f['zs'][...]
     absorption_points = f['absorption_points'][...]
-    return angles, absorption_points
+    return angles, absorption_points, zs

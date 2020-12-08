@@ -274,12 +274,12 @@ def sparse2dense(sparse_tracks, n_pixels=50):
 
     return torch.stack(dense_tracks)
 
-def post_rotate(angles_tuple, N, aug=3, fix=False, datatype="sim"):
+def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     '''
     Takes output from gpu_test ensemble and re-rotates 3-fold angles appropriately. Also removes repeated outputs for moments.
     '''
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, angles1, errors1, xy_abs_pts = angles_tuple
+    energies, energies_sim, zs, xy_abs_pts = angles_tuple
 
     ang = triple_angle_reshape(angles, N, augment=aug)
     mom = triple_angle_reshape(moms,N, augment=aug)
@@ -291,6 +291,7 @@ def post_rotate(angles_tuple, N, aug=3, fix=False, datatype="sim"):
     abs_pts = triple_angle_reshape(abs_pts,N, augment=aug)
     abs_pts_sim = triple_angle_reshape(abs_pts_sim,N, augment=aug)
     mom_abs_pts = triple_angle_reshape(mom_abs_pts,N, augment=aug)
+    zs = triple_angle_reshape(mom_abs_pts, N, augment=1)
 
     xy_abs_pts = np.reshape(xy_abs_pts, [-1,2,N], "C")[:,:,0]
     abs_pts = np.mean(np.reshape(abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
@@ -303,12 +304,32 @@ def post_rotate(angles_tuple, N, aug=3, fix=False, datatype="sim"):
     if aug == 3:
         ang = triple_angle_rotate(ang)
 
-    # if datatype == "sim" and fix:
-    #     ang[E > 6.4,:,:] = np.stack([ang[E > 6.4,0,:],ang[E > 6.4,0,:],ang[E > 6.4,0,:]],axis=1)
-
-    #TODO: abs_pts and energy appropriate reshaping + condition if anything is [None]
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, angles1, errors1, xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], angles1, errors1, xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], zs, xy_abs_pts)
     return A
+
+def fits_save(results, file):
+    angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
+    energies, energies_sim, zs, xy_abs_pts = results
+
+    hdu = fits.PrimaryHDU()
+    hdul = fits.HDUList([hdu])
+
+    c1 = fits.Column(name='NN_PHI', array=angles, format='K')
+    c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='K')
+    c3 = fits.Column(name='PHI', array=angles_sim, format='K')
+    c4 = fits.Column(name='MOM', array=moms, format='K')
+    c5 = fits.Column(name='NN_SIGMA', array=errors, format='K')
+    c6 = fits.Column(name='NN_ABS', array=abs_pts, format='K')
+    c7 = fits.Column(name='MOM_ABS', array=mom_abs_pts, format='K')
+    c8 = fits.Column(name='ABS', array=abs_pts_sim + zs, format='K')
+    c9 = fits.Column(name='ENERGY', array=energies_sim, format='K')
+    c0 = fits.Column(name='NN_ENERGY', array=energies, format='K')
+    table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c0])
+    hdul.append(table_hdu)
+    hdul.writeto(file + '.fits')
+
+    values = np.arange(2*2*4).reshape(4, 2, 2)
+    c3 = fits.Column(name='intarray', format='4I', dim='(2, 2)', array=values)

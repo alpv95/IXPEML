@@ -67,67 +67,55 @@ class NetTest(object):
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))
         meanE, stdE = torch.load(os.path.join(up2(net),"ZNE.pt"))
 
-        test = H5Dataset(dataset, datatype=datatype, losstype=losstype, energy_cal=(meanE, stdE),
+        dataset = H5Dataset(dataset, datatype=datatype, losstype=losstype, energy_cal=(meanE, stdE),
                                     transform=transforms.Compose([ZNormalize(mean=mean,std=std)]))
 
         kwargs = {'num_workers': 4, 'pin_memory': True}
-        test_loader = torch.utils.data.DataLoader(test, batch_size=batch_size, shuffle=False, **kwargs)
+        test_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, **kwargs)
            
         m = TrackAngleRegressor(load_checkpoint=net, input_channels=self.input_channels)
 
         angles = m.predict(test_loader,bayes=bayes)
-        angles_mom = (test.mom_phis).numpy()
-        if angles.shape[0] == 7:
+        angles_mom = (dataset.mom_phis).numpy()
+        if angles.shape[0] == 2:
             errors = angles[1,:]
-            errors1 = angles[3,:]
-            angles1 = angles[2,:]
-            mom_abs_pts = np.reshape( (test.mom_abs_pts).numpy(), (-1,2), order="C")
-            abs_pts = np.transpose(angles[4:6,:])
-            energies = angles[6,:]
-            angles = angles[0,:]
-        elif angles.shape[0] == 2:
-            errors = angles[1,:]
-            errors1 = [None]
-            angles1 = [None]
             angles = angles[0,:]
             mom_abs_pts = [None]
             abs_pts = [None]
             energies = [None]
         elif angles.shape[0] == 5:
             errors = angles[1,:]
-            errors1 = [None]
-            angles1 = [None]
-            mom_abs_pts = np.reshape( (test.mom_abs_pts).numpy(), (-1,2), order="C")
+            mom_abs_pts = np.reshape( (dataset.mom_abs_pts).numpy(), (-1,2), order="C")
             abs_pts = np.transpose(angles[2:4,:])
             energies = angles[4,:]
             angles = angles[0,:]
         else:
-            errors1 = [None]
-            angles1 = [None]
             errors = [None]
             abs_pts = [None]
             energies = [None]
             mom_abs_pts = [None]
                 
         try:
-            moms = test.moms.numpy()
+            moms = dataset.moms.numpy()
         except AttributeError:
-            moms = test.moms
+            moms = dataset.moms
         
         if datatype =='sim':
             augment = angles_mom.shape[1]
             angles_mom = np.ndarray.flatten( angles_mom, "C" )
             moms = np.ndarray.flatten( moms, "C" )
-            angles_sim = np.ndarray.flatten( torch.atan2(test.angles[:,:,1],test.angles[:,:,0]).numpy(), "C" )
-            abs_pts_sim = (test.abs_pts).numpy()
+            zs = np.ndarray.flatten( dataset.zs.numpy(), "C" )
+            angles_sim = np.ndarray.flatten( torch.atan2(dataset.angles[:,:,1],dataset.angles[:,:,0]).numpy(), "C" )
+            abs_pts_sim = (dataset.abs_pts).numpy()
             abs_pts_sim = np.reshape( abs_pts_sim, (-1,2), order="C" )
-            energies_sim = (test.energy).numpy()
+            energies_sim = (dataset.energy).numpy()
             energies_sim = np.ndarray.flatten( energies_sim, "C" ) 
         else:
             angles_sim = [None]
             abs_pts_sim = [None]
             energies_sim = [None]
-        xy_abs_pts = test.xy_abs_pts.numpy()
+            zs = [None]
+        xy_abs_pts = dataset.xy_abs_pts.numpy()
 
         #transform predicted energies back to kev if not none
         if energies[0] is not None:
@@ -135,7 +123,7 @@ class NetTest(object):
         if energies_sim[0] is not None:
             energies_sim = np.round(energies_sim * stdE.item() + meanE.item(), 3)
 
-        return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, angles1, errors1, xy_abs_pts
+        return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, zs, xy_abs_pts
 
     def stokes_correction(self, angles):
         '''
@@ -406,28 +394,34 @@ class NetTest(object):
         '''
         for data in self.datasets:
             name = data.replace(self.data_base,"") + "__" + "ensemble"
-            angles = ([],[],[],[],[],[],[],[],[],[],[],[],[])
+            results = ([],[],[],[],[],[],[],[],[],[],[],[])
             for i, net in enumerate(self.nets):
                 print(">> NN {}/{} : \n".format(i+1,len(self.nets)))
-                angles = tuple(map( np.append, angles, self._predict(net, data, bayes) ))
+                results = tuple(map( np.append, results, self._predict(net, data, bayes) ))
                 print(">> Complete")
             if self.stokes_correct:
-                angles = self.stokes_correction(angles)
+                results = self.stokes_correction(results)
 
             #Post processing for rotations and reducing repeated moments outputs
-            angles = post_rotate(angles, self.n_nets, aug=3, fix=False, datatype=self.datatype)
+            results = post_rotate(results, self.n_nets, aug=3, datatype=self.datatype)
 
-            mu, phi0, mu_err, phi0_err = self.fit_mod(angles, method=self.method)
-            mu_w, phi0_w, mu_err_w, phi0_err_w = self.fit_mod(angles, method="weighted_MLE")
+            mu, phi0, mu_err, phi0_err = self.fit_mod(results, method=self.method)
+            mu_w, phi0_w, mu_err_w, phi0_err_w = self.fit_mod(results, method="weighted_MLE")
  
-            #SAVE predictions
+            #TODO: FITS file final data form
+            #TODO: combine aleatoric and epistemic errors here 
             if self.save_table is not None:
+                fits_save(results, )
+
+
                 name = data.replace(self.data_base,"") + "__" + self.save_table + "__" + "ensemble"
-                pickle.dump(angles, open(os.path.join(self.save_base, name.replace("/","_") + ".pickle"),"wb"))
-                print("Saved to: {}".format(os.path.join(self.save_base, name.replace("/","_") + ".pickle")))  
+                pickle.dump(results, open(os.path.join(self.save_base, name.replace("/","_") + ".pickle"),"wb"))
+                print("Saved to: {}".format(os.path.join(self.save_base, name.replace("/","_") + ".pickle"))) 
+
+
 
             if self.plot:
-                self.plot_save( angles, mu, phi0, name )
+                self.plot_save( results, mu, phi0, name )
             self.results[name] = (mu, mu_err, phi0_err, phi0)
 
             print(">> Modulation factors and EVPAs for entire dataset -->")
