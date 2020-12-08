@@ -58,396 +58,425 @@ args = parser.parse_args()
 Dataset = namedtuple('Dataset', ['name', 'energy', 'angle', 'pol', 'type'])
 
 
-# class builder(object):
-#     in_base = args.input_base
-#     out_base = args.out_base
-#     n_pixels = args.npix
-#     augment = args.augment
-#     shift = args.shift
-#     pl = args.pl
+class builder(object):
+    in_base = args.input_base
+    out_base = args.out_base
+    n_pixels = args.npix
+    augment = args.augment
+    shift = args.shift
+    pl = args.pl
+    fraction = args.fraction
 
-#     def __init__(self, datasets, total):
-#         self.total = total
-#         self.datasets = datasets
+    def __init__(self, datasets, total):
+        self.total = total
+        self.datasets = datasets
+        self.out_files = []
 
-#         tracks_cum = []
-#         mom_phis_cum = torch.zeros( (self.total, self.augment) ) 
-#         moms_cum = torch.zeros( self.total, self.augment )
-#         mom_abs_cum = torch.zeros( (self.total, self.augment, self.shift, 2) )
-#         xy_abs_cum = torch.zeros( (self.total, 2) ) #xy location of track on detector grid
-#         self.build_result = [tracks_cum, mom_phis_cum, moms_cum, mom_abs_cum, xy_abs_cum]
+        self.build_result = {"tracks": [], "mom_phis": torch.zeros( (self.total, self.augment) ), "moms": torch.zeros( self.total, self.augment ),
+                             "mom_abs": torch.zeros( (self.total, self.augment, self.shift, 2) ), "xy_abs": torch.zeros( (self.total, 2) )}
 
-#     def init_build(self, input_file, pulse_cut):
-#         with fits.open(input_file, memmap=False) as hdu:
-#             data = hdu[1].data
+    def init_build(self, input_file, pulse_cut):
+        with fits.open(input_file, memmap=False) as hdu:
+            data = hdu[1].data
+
+        #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
+        cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
+        if pulse_cut:
+            (mu,sigma) = norm.fit(data['PI'])
+            cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
+        return data, cut
+
+    def save(self, split, split_func):
+        N_final = len(self.build_result["tracks"])
+        indxs = split_func(np.arange(N_final), fracs=split)
+
+        for indx, save_file in zip(indxs, self.out_files):
+            tracks_cum_save = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in indx]
+            with open(save_file + "tracks_full.pickle", "wb") as f:
+                pickle.dump(tracks_cum_save, f)
+            torch.save( {key: value[indx] for (key,value) in self.build_result.items() if key != "tracks"}, save_file + "labels_full.pt" )
+            print("Saved, ", save_file )
         
-#         #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
-#         cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
-#         if pulse_cut:
-#             (mu,sigma) = norm.fit(data['PI'])
-#             cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
-#         return data, cut
-
-#     def save(self, split, split_func):
-#         N_final = len(self.build_result[0])
-#         indxs = split_func(np.arange(N_final), fracs=split)
-
-#         for indx, save_file in zip(indxs,files):
-#             tracks_cum_save = [torch.from_numpy(self.build_result[0][idx]) for idx in indx]
-#             with open(save_file + "tracks_full.pickle", "wb") as f:
-#                 pickle.dump(tracks_cum_save, f)
-#             torch.save( [result[indx] for result in self.build_result], save_file + "labels_full.pt" )
-#             print("Saved, ", save_file )
-        
-#         return indxs[0]
+        return indxs[0]
 
 
-# class simulated(builder):
-#     def __init__(self):
-#         super().__init__()
-#         try:
-#             # Create results Directory
-#             os.makedirs(os.path.join(self.out_base,'train/'))
-#             os.makedirs(os.path.join(self.out_base,'val/'))
-#             os.makedirs(os.path.join(self.out_base,'test/'))
-#             print("Directory Created for Simulated data") 
-#         except FileExistsError:
-#             print("Directory already exists for Simulated")
+class simulated(builder):
+    def __init__(self, datasets, total):
+        super().__init__(datasets, total)
+        try:
+            # Create results Directory
+            os.makedirs(os.path.join(self.out_base,'train/'))
+            os.makedirs(os.path.join(self.out_base,'val/'))
+            os.makedirs(os.path.join(self.out_base,'test/'))
+            print("Directory Created for Simulated data") 
+        except FileExistsError:
+            print("Directory already exists for Simulated")
 
-#         sq_output_file_train = os.path.join(self.out_base,'train/') 
-#         sq_output_file_val = os.path.join(self.out_base,'val/') 
-#         sq_output_file_test = os.path.join(self.out_base,'test/') 
+        self.out_files = [os.path.join(self.out_base,'train/'),  
+                            os.path.join(self.out_base,'val/'), 
+                            os.path.join(self.out_base,'test/')] 
 
-#         angles_cum = torch.zeros( (self.total, self.augment) )
-#         abs_cum = torch.zeros( (self.total, self.augment, self.shift, 2) )
-#         energy_cum = torch.zeros( self.total, self.augment )
-#         z_cum = torch.zeros( self.total, self.augment )
-#         self.build_result.extend([angles_cum, abs_cum, energy_cum, z_cum])
+        self.build_result.update([("angles", torch.zeros( (self.total, self.augment) )), 
+                                    ("abs", torch.zeros( (self.total, self.augment, self.shift, 2) )),
+                                     ("energy", torch.zeros( self.total, self.augment )), ("z", torch.zeros( self.total ))])
 
-#     def build(self, pulse_cut):
-#         cur_idx = 0
-#         for dataset in self.datasets:
-#             print('Building dataset for {name} {energy} keV {angle} deg {type}'.format(**dataset._asdict()))
-#             energy_str = '{:.1f}'.format(dataset.energy).replace('.', 'p')
-#             input_file = os.path.join(self.in_base, '{}_{}{}_recon.fits'.format(dataset.name, 
-#                                                                         angle_str, energy_str))
-#             n_train_final = int(dataset.energy**(-self.pl) * 3070000 * fraction * aeff(dataset.energy))
+    def build(self, pulse_cut, aeff):
+        cur_idx = 0
+        for dataset in self.datasets:
+            print('Building dataset for {name} {energy} keV {angle} deg {type}'.format(**dataset._asdict()))
+            energy_str = '{:.1f}'.format(dataset.energy).replace('.', 'p')
+            input_file = os.path.join(self.in_base, '{}_{}_recon.fits'.format(dataset.name, energy_str))
+            n_train_final = int(dataset.energy**(-self.pl) * 3070000 * self.fraction * aeff(dataset.energy))
 
-#             data, cut = super().init_build(input_file, pulse_cut)
-#             with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
-#                 sim_data = hdu[3].data
-#             cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
+            data, cut = super().init_build(input_file, pulse_cut)
+            with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
+                sim_data = hdu[3].data
 
-#             moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
-#             Zs = sim_data['ABS_Z'][cut]
-#             mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
-#             bars = np.column_stack((data['BARX'],data['BARY']))[cut]
-#             abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
-#             hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-#                                             sim_data['PE_PHI'][cut], abs_pts, moms, data['DETPHI'][cut], 
-#                                             mom_abs_pts, bars)
-#             hex_tracks = hex_tracks[np.arange(n_train_final)]
+            cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
 
-#             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
+            moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+            Zs = sim_data['ABS_Z'][cut].astype(np.float32)
+            mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
+            bars = np.column_stack((data['BARX'],data['BARY']))[cut]
+            abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
+            hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
+                                            sim_data['PE_PHI'][cut], abs_pts, moms, data['DETPHI'][cut], 
+                                            mom_abs_pts, bars, Zs)
 
-#             self.build_result[0].extend(tracks)
-#             self.build_result[5][cur_idx : (cur_idx + n_train_final)] = angles 
-#             self.build_result[1][cur_idx : (cur_idx + n_train_final)] = mom_phis
-#             self.build_result[2][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
-#             self.build_result[6][cur_idx : (cur_idx + n_train_final)] = abs_pts 
-#             self.build_result[3][cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
-#             self.build_result[7][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
-#             self.build_result[4][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_abs_pt)
-#             self.build_result[8][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(Zs * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
+            print(hex_tracks.n_tracks,"loaded ok")
+            hex_tracks = hex_tracks[np.arange(n_train_final)]
 
-#             cur_idx += n_train_final
+            tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
 
+            self.build_result["tracks"].extend(tracks)
+            self.build_result["angles"][cur_idx : (cur_idx + n_train_final)] = angles 
+            self.build_result["mom_phis"][cur_idx : (cur_idx + n_train_final)] = mom_phis
+            self.build_result["moms"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
+            self.build_result["abs"][cur_idx : (cur_idx + n_train_final)] = abs_pts 
+            self.build_result["mom_abs"][cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
+            self.build_result["energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
+            self.build_result["xy_abs"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_abs_pt)
+            self.build_result["z"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.zs)
 
-#     def save(self, split, split_func):
-#         train_inds = super().save(split, split_func)
-
-#         train_meanE = torch.mean(self.build_result[7][train_inds], dim=0)
-#         train_stdE = torch.std(self.build_result[7][train_inds], dim=0)
-#         train_mean, train_std = sparse_mean(self.build_result[0], self.n_pixels)
-#         torch.save( (train_mean, train_std), os.path.join(self.out_base,'train/ZN.pt'))
-#         torch.save( (train_meanE, train_stdE), os.path.join(self.out_base,'train/ZNE.pt'))
+            cur_idx += n_train_final
 
 
-# class measured(builder):
-#     def __init__(self):
-#         super().__init__()
-#         try:
-#             # Create results Directory
-#             os.makedirs(os.path.join(self.out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)))
-#             os.makedirs(os.path.join(self.out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)))
-#             print("Directory Created ") 
-#         except FileExistsError:
-#             print("Directory already exists")
-        
-#         sq_output_file_train = os.path.join(self.out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)) 
-#         sq_output_file_test = os.path.join(self.out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol))
+    def save(self, split, split_func):
+        train_inds = super().save(split, split_func)
 
-#     def build(self, meas_file, pulse_cut):
-#         input_file = os.path.join(self.in_base, meas_file)
-#         data, cut = super().init_build(input_file, pulse_cut)
+        train_meanE = torch.mean(self.build_result["energy"][train_inds], dim=0)
+        train_stdE = torch.std(self.build_result["energy"][train_inds], dim=0)
+        tracks_cum_train = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in train_inds]
+        train_mean, train_std = sparse_mean(tracks_cum_train, self.n_pixels)
 
-#         moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
-#         mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
-#         bars = np.column_stack((data['BARX'],data['BARY']))[cut]
-#         hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-#                                          moms, data['DETPHI'][cut], mom_abs_pts, bars) 
+        torch.save( (train_mean, train_std), os.path.join(self.out_base,'train/ZN.pt'))
+        torch.save( (train_meanE, train_stdE), os.path.join(self.out_base,'train/ZNE.pt'))
 
-#         hex_tracks = hex_tracks[np.arange(self.total)]
+
+class measured(builder):
+    def __init__(self, datasets, total):
+        super().__init__(datasets, total)
+        energy_str = '{:.1f}'.format(self.datasets[0].energy).replace('.', 'p')
+        try:
+            # Create results Directory
+            os.makedirs(os.path.join(self.out_base,'meas_{}_{}/train/'.format(energy_str, self.datasets[0].pol)))
+            os.makedirs(os.path.join(self.out_base,'meas_{}_{}/test/'.format(energy_str, self.datasets[0].pol)))
+            print("Directory Created ") 
+        except FileExistsError:
+            print("Directory already exists")
+        self.out_files = [os.path.join(self.out_base,'meas_{}_{}/train/'.format(energy_str,  self.datasets[0].pol)),  
+                        os.path.join(self.out_base,'meas_{}_{}/test/'.format(energy_str,  self.datasets[0].pol))]
+
+    def build(self, meas_file, pulse_cut):
+        input_file = os.path.join(self.in_base, meas_file)
+        data, cut = super().init_build(input_file, pulse_cut)
+
+        moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+        mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
+        bars = np.column_stack((data['BARX'],data['BARY']))[cut]
+        hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
+                                         moms, data['DETPHI'][cut], mom_abs_pts, bars) 
+        print(hex_tracks.n_tracks,"loaded ok")
+        hex_tracks = hex_tracks[np.arange(self.total)]
                     
-#         tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
+        tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
 
-#         self.build_result[0].extend(tracks)
-#         self.build_result[1][:self.total] = mom_phis.unsqueeze(1)
-#         self.build_result[2][:self.total] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
-#         self.build_result[3][:self.total] = mom_abs_pts 
-#         self.build_result[4][:self.total] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
+        self.build_result["tracks"].extend(tracks)
+        self.build_result["mom_phis"][:self.total] = mom_phis.unsqueeze(1)
+        self.build_result["moms"][:self.total] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
+        self.build_result["mom_abs"][:self.total] = mom_abs_pts 
+        self.build_result["xy_abs"][:self.total] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
+
+
+
+def main():
+    meas_split = (0.9, 0.1)
+    sim_split = (0.9, 0.05, 0.05)
+
+    if args.meas:
+        datasets = [Dataset('gen4', args.meas_e, None, 'pol', 'meas')]
+        Builder = measured(datasets, args.meas_tot)
+        Builder.build(args.meas, args.pulse_cut)
+        Builder.save(meas_split, tt_random_split)
+    else:
+        datasets = []
+        energies = np.round(np.arange(args.Erange[0], args.Erange[1], 0.1),2)
+        angles = [] #np.linspace(0,170,18).astype('int')
+        for energy in energies:
+            datasets.append(Dataset('gen4', round(energy, 1), None, 'pol', 'sim'))
+
+        if args.aeff:
+            aeff = lambda E: Aeff(E)
+        else:
+            aeff = lambda E: 1
+
+        total = 0
+        for energy in energies:
+            total += int(energy**(-args.pl) * 3070000 * args.fraction * aeff(energy) ) + len(angles) * int( energy**(-args.pl) * 380000 * args.fraction * aeff(energy) )
+        print("Total number of unique tracks = {}\n".format(total))
+        
+        Builder = simulated(datasets, total)
+        Builder.build(args.pulse_cut, aeff)
+        Builder.save(sim_split, tvt_random_split)
+
+
+
+
+
+
 
 
 
 # def main():
 #     input_base, out_base, augment, shift, n_pixels, Erange, \
-#     fraction, pl, aeff, meas, meas_tot, meas_e, pulse, shuffle = args
+#     fraction, pl, aeff_on, meas, meas_tot, meas_e, pulse_cut, shuffle = args.input_base, args.out_base, args.augment, args.shift, args.npix, args.Erange, \
+#     args.fraction, args.pl, args.aeff, args.meas, args.meas_tot, args.meas_e, args.pulse_cut, args.shuffle
+#     print("out_base: ", out_base)
+
 #     # meas dataset 2-way vt split
 #     meas_split = (0.9, 0.1)
 #     # sim dataset 3-way tvt split
 #     sim_split = (0.9, 0.05, 0.05)
 
+#     if aeff_on:
+#         aeff = lambda E: Aeff(E)
+#     else:
+#         aeff = lambda E: 1
 
-def main():
-    input_base, out_base, augment, shift, n_pixels, Erange, \
-    fraction, pl, aeff_on, meas, meas_tot, meas_e, pulse_cut, shuffle = args.input_base, args.out_base, args.augment, args.shift, args.npix, args.Erange, \
-    args.fraction, args.pl, args.aeff, args.meas, args.meas_tot, args.meas_e, args.pulse_cut, args.shuffle
-    print("out_base: ", out_base)
+#     datasets = []
+#     energies = np.round(np.arange(Erange[0], Erange[1], 0.1),2)
+#     angles = []#np.linspace(0,170,18).astype('int')
+#     for energy in energies:
+#         datasets.append(Dataset('gen4', round(energy, 1), None, 'pol', 'sim'))
+#     for angle in angles:
+#         for energy in energies:
+#             datasets.append(Dataset('gen4', round(energy, 1), angle, 'pol', 'sim'))
+#     #datasets = [Dataset('gen4', round(6.4, 1), 120, 'pol', 'sim'),Dataset('gen4', round(6.5, 1), 120, 'pol', 'sim')]
+#     if meas:
+#         datasets = [Dataset('gen4', meas_e, None, 'pol', 'meas')]
 
-    # meas dataset 2-way vt split
-    meas_split = (0.9, 0.1)
-    # sim dataset 3-way tvt split
-    sim_split = (0.9, 0.05, 0.05)
+#     if not os.path.exists(out_base):
+#         os.makedirs(out_base)
 
-    if aeff_on:
-        aeff = lambda E: Aeff(E)
-    else:
-        aeff = lambda E: 1
-
-    datasets = []
-    energies = np.round(np.arange(Erange[0], Erange[1], 0.1),2)
-    angles = []#np.linspace(0,170,18).astype('int')
-    for energy in energies:
-        datasets.append(Dataset('gen4', round(energy, 1), None, 'pol', 'sim'))
-    for angle in angles:
-        for energy in energies:
-            datasets.append(Dataset('gen4', round(energy, 1), angle, 'pol', 'sim'))
-    #datasets = [Dataset('gen4', round(6.4, 1), 120, 'pol', 'sim'),Dataset('gen4', round(6.5, 1), 120, 'pol', 'sim')]
-    if meas:
-        datasets = [Dataset('gen4', meas_e, None, 'pol', 'meas')]
-
-    if not os.path.exists(out_base):
-        os.makedirs(out_base)
-
-    if not meas:
-        try:
-            # Create results Directory
-            os.makedirs(os.path.join(out_base,'train/'))
-            os.makedirs(os.path.join(out_base,'val/'))
-            os.makedirs(os.path.join(out_base,'test/'))
-            print("Directory Created for Simulated data") 
-        except FileExistsError:
-            print("Directory already exists for Simulated")
+#     if not meas:
+#         try:
+#             # Create results Directory
+#             os.makedirs(os.path.join(out_base,'train/'))
+#             os.makedirs(os.path.join(out_base,'val/'))
+#             os.makedirs(os.path.join(out_base,'test/'))
+#             print("Directory Created for Simulated data") 
+#         except FileExistsError:
+#             print("Directory already exists for Simulated")
             
-        total = 0
-        for energy in energies:
-            total += int(energy**(-pl) * 3070000 * fraction * aeff(energy) ) + len(angles) * int( energy**(-pl) * 380000 * fraction * aeff(energy) )
-        print("Total number of unique tracks = {}\n".format(total))
-        angles_cum = torch.zeros( (total, augment) )
-        tracks_cum = []
-        mom_phis_cum = torch.zeros( (total, augment) ); moms_cum = torch.zeros( total, augment )
-        abs_cum = torch.zeros( (total, augment, shift, 2) )
-        mom_abs_cum = torch.zeros( (total, augment, shift, 2) )
-        energy_cum = torch.zeros( total, augment )
-        xy_abs_cum = torch.zeros( (total, 2) ) 
-    else:
-        total = meas_tot
-        print("Total number of unique tracks to square = {}\n".format(total))
-        tracks_cum = []
-        mom_phis_cum = torch.zeros( (total, augment) ); moms_cum = torch.zeros( total, augment )
-        mom_abs_cum = torch.zeros( (total, augment, shift, 2) )
-        xy_abs_cum = torch.zeros( (total, 2) ) #xy location of track on detector grid
-    cur_idx = 0
+#         total = 0
+#         for energy in energies:
+#             total += int(energy**(-pl) * 3070000 * fraction * aeff(energy) ) + len(angles) * int( energy**(-pl) * 380000 * fraction * aeff(energy) )
+#         print("Total number of unique tracks = {}\n".format(total))
+#         angles_cum = torch.zeros( (total, augment) )
+#         tracks_cum = []
+#         mom_phis_cum = torch.zeros( (total, augment) ); moms_cum = torch.zeros( total, augment )
+#         abs_cum = torch.zeros( (total, augment, shift, 2) )
+#         mom_abs_cum = torch.zeros( (total, augment, shift, 2) )
+#         energy_cum = torch.zeros( total, augment )
+#         xy_abs_cum = torch.zeros( (total, 2) ) 
+#     else:
+#         total = meas_tot
+#         print("Total number of unique tracks to square = {}\n".format(total))
+#         tracks_cum = []
+#         mom_phis_cum = torch.zeros( (total, augment) ); moms_cum = torch.zeros( total, augment )
+#         mom_abs_cum = torch.zeros( (total, augment, shift, 2) )
+#         xy_abs_cum = torch.zeros( (total, 2) ) #xy location of track on detector grid
+#     cur_idx = 0
         
 
 
-    for dataset in datasets:
-        print('Building dataset for {name} {energy} keV {angle} deg {type}'.format(**dataset._asdict()))
-        energy_str = '{:.1f}'.format(dataset.energy).replace('.', 'p')
-        if dataset.type == 'sim':
-           if dataset.angle is not None:
-               angle_str = 'ang{}_'.format(dataset.angle)
-           else:
-               angle_str = ''
-           input_file = os.path.join(input_base, '{}_{}{}_recon.fits'.format(
-            dataset.name, angle_str, energy_str
-           ))
-        else: 
-           input_file = os.path.join(input_base, meas)
+#     for dataset in datasets:
+#         print('Building dataset for {name} {energy} keV {angle} deg {type}'.format(**dataset._asdict()))
+#         energy_str = '{:.1f}'.format(dataset.energy).replace('.', 'p')
+#         if dataset.type == 'sim':
+#            if dataset.angle is not None:
+#                angle_str = 'ang{}_'.format(dataset.angle)
+#            else:
+#                angle_str = ''
+#            input_file = os.path.join(input_base, '{}_{}{}_recon.fits'.format(
+#             dataset.name, angle_str, energy_str
+#            ))
+#         else: 
+#            input_file = os.path.join(input_base, meas)
 
-        with fits.open(input_file, memmap=False) as hdu:
-            data = hdu[1].data
+#         with fits.open(input_file, memmap=False) as hdu:
+#             data = hdu[1].data
         
-        #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
-        cut = (abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3) * (data['NUM_CLU'] > 0)
-        if pulse_cut:
-            (mu,sigma) = norm.fit(data['PI'])
-            cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
+#         #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
+#         cut = (abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3) * (data['NUM_CLU'] > 0)
+#         if pulse_cut:
+#             (mu,sigma) = norm.fit(data['PI'])
+#             cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
 
-        if dataset.type == 'sim':
-            with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
-                sim_data = hdu[3].data
-            cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
+#         if dataset.type == 'sim':
+#             with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
+#                 sim_data = hdu[3].data
+#             cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
 
-            moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
-            mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
-            bars = np.column_stack((data['BARX'],data['BARY']))[cut]
-            abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
-            hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], sim_data['PE_PHI'][cut], abs_pts, moms, data['DETPHI'][cut], mom_abs_pts, bars) 
-        else:
-            moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
-            mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
-            bars = np.column_stack((data['BARX'],data['BARY']))[cut]
-            hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], moms, data['DETPHI'][cut], mom_abs_pts, bars) 
+#             moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+#             mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
+#             bars = np.column_stack((data['BARX'],data['BARY']))[cut]
+#             abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
+#             hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], sim_data['PE_PHI'][cut], abs_pts, moms, data['DETPHI'][cut], mom_abs_pts, bars) 
+#         else:
+#             moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+#             mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
+#             bars = np.column_stack((data['BARX'],data['BARY']))[cut]
+#             hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], moms, data['DETPHI'][cut], mom_abs_pts, bars) 
 
-        n_tracks = hex_tracks.n_tracks
-        print(n_tracks,"loaded ok")
+#         n_tracks = hex_tracks.n_tracks
+#         print(n_tracks,"loaded ok")
 
-        if dataset.type == 'sim':
-            #more low energy tracks than high energy
-            if dataset.angle is not None:
-                n_train_final = int(dataset.energy**(-pl) * 380000 * fraction * aeff(dataset.energy))#1250 #int(4000 - dataset.energy*400)  * Aeff_train(dataset.energy)
-            else:
-                n_train_final = int(dataset.energy**(-pl) * 3070000 * fraction * aeff(dataset.energy)) 
+#         if dataset.type == 'sim':
+#             #more low energy tracks than high energy
+#             if dataset.angle is not None:
+#                 n_train_final = int(dataset.energy**(-pl) * 380000 * fraction * aeff(dataset.energy))#1250 #int(4000 - dataset.energy*400)  * Aeff_train(dataset.energy)
+#             else:
+#                 n_train_final = int(dataset.energy**(-pl) * 3070000 * fraction * aeff(dataset.energy)) 
             
-            if shuffle:
-                #randomly select subset
-                hex_tracks = expand_tracks(hex_tracks, n_train_final)
-            else:
-                hex_tracks = hex_tracks[np.arange(n_train_final)]
+#             if shuffle:
+#                 #randomly select subset
+#                 hex_tracks = expand_tracks(hex_tracks, n_train_final)
+#             else:
+#                 hex_tracks = hex_tracks[np.arange(n_train_final)]
 
-            tot_tracks = hex_tracks.n_tracks
-            sq_output_file_train = os.path.join(out_base,'train/') 
-            sq_output_file_val = os.path.join(out_base,'val/') 
-            sq_output_file_test = os.path.join(out_base,'test/') 
+#             tot_tracks = hex_tracks.n_tracks
+#             sq_output_file_train = os.path.join(out_base,'train/') 
+#             sq_output_file_val = os.path.join(out_base,'val/') 
+#             sq_output_file_test = os.path.join(out_base,'test/') 
             
-            tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, n_pixels, augment=augment, shift=shift)
+#             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, n_pixels, augment=augment, shift=shift)
 
-            tracks_cum.extend(tracks)
-            angles_cum[cur_idx : (cur_idx + n_train_final)] = angles 
-            mom_phis_cum[cur_idx : (cur_idx + n_train_final)] = mom_phis
-            moms_cum[cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(augment,1).T
-            abs_cum[cur_idx : (cur_idx + n_train_final)] = abs_pts 
-            mom_abs_cum[cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
-            energy_cum[cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(augment,1).T
-            xy_abs_cum[cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_abs_pt)
+#             tracks_cum.extend(tracks)
+#             angles_cum[cur_idx : (cur_idx + n_train_final)] = angles 
+#             mom_phis_cum[cur_idx : (cur_idx + n_train_final)] = mom_phis
+#             moms_cum[cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(augment,1).T
+#             abs_cum[cur_idx : (cur_idx + n_train_final)] = abs_pts 
+#             mom_abs_cum[cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
+#             energy_cum[cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(augment,1).T
+#             xy_abs_cum[cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_abs_pt)
 
-            cur_idx += n_train_final
+#             cur_idx += n_train_final
 
-            print(len(tracks_cum),cur_idx)
-            print(tracks_cum[cur_idx-1].shape)
-            print(angles_cum.shape)
+#             print(len(tracks_cum),cur_idx)
+#             print(tracks_cum[cur_idx-1].shape)
+#             print(angles_cum.shape)
 
 
 
-        elif dataset.type == 'meas':
-            # Split 2 ways
-            if shuffle:
-                #randomly select subset
-                hex_tracks = expand_tracks(hex_tracks, total)
-            else:
-                hex_tracks = hex_tracks[np.arange(total)]
+#         elif dataset.type == 'meas':
+#             # Split 2 ways
+#             if shuffle:
+#                 #randomly select subset
+#                 hex_tracks = expand_tracks(hex_tracks, total)
+#             else:
+#                 hex_tracks = hex_tracks[np.arange(total)]
 
-            hex_tracks = expand_tracks(hex_tracks, total)
-            tot_tracks = hex_tracks.n_tracks
+#             hex_tracks = expand_tracks(hex_tracks, total)
+#             tot_tracks = hex_tracks.n_tracks
 
-            try:
-                os.makedirs(os.path.join(out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)))
-                os.makedirs(os.path.join(out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)))
-                print("Directory Created ") 
-            except FileExistsError:
-                print("Directory already exists")
+#             try:
+#                 os.makedirs(os.path.join(out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)))
+#                 os.makedirs(os.path.join(out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)))
+#                 print("Directory Created ") 
+#             except FileExistsError:
+#                 print("Directory already exists")
 
-            sq_output_file_train = os.path.join(out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)) 
-            sq_output_file_test = os.path.join(out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)) 
+#             sq_output_file_train = os.path.join(out_base,'meas_{}_{}_{}/train/'.format(energy_str, dataset.angle, dataset.pol)) 
+#             sq_output_file_test = os.path.join(out_base,'meas_{}_{}_{}/test/'.format(energy_str, dataset.angle, dataset.pol)) 
             
-            tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, n_pixels, augment=augment, shift=shift)
+#             tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, n_pixels, augment=augment, shift=shift)
 
-            tracks_cum.extend(tracks)
-            mom_phis_cum[cur_idx : (cur_idx + total)] = mom_phis.unsqueeze(1)
-            moms_cum[cur_idx : (cur_idx + total)] = torch.from_numpy(hex_tracks.mom).repeat(augment,1).T
-            mom_abs_cum[cur_idx : (cur_idx + total)] = mom_abs_pts 
-            xy_abs_cum[cur_idx : (cur_idx + total)] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
+#             tracks_cum.extend(tracks)
+#             mom_phis_cum[cur_idx : (cur_idx + total)] = mom_phis.unsqueeze(1)
+#             moms_cum[cur_idx : (cur_idx + total)] = torch.from_numpy(hex_tracks.mom).repeat(augment,1).T
+#             mom_abs_cum[cur_idx : (cur_idx + total)] = mom_abs_pts 
+#             xy_abs_cum[cur_idx : (cur_idx + total)] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
 
-            cur_idx += total
+#             cur_idx += total
 
-        else:
-            raise ValueError('dataset type not recognized')
+#         else:
+#             raise ValueError('dataset type not recognized')
     
-    #Save data in torch pt file
-    if dataset.type == 'sim':
-        N_final = len(tracks_cum) #tracks_cum.shape[0]
-        if shuffle:
-            print("Shuffling") #Note: NEED shuffling for unpolarized (simulated) dataset
-            train_inds, val_inds, test_inds = tvt_random_split(np.arange(N_final), fracs=sim_split)
-        else:
-            print("Not shuffling")
-            train_inds = np.arange(N_final)[:int(sim_split[0] * N_final)]
-            val_inds = np.arange(N_final)[int(sim_split[0] * N_final):int((sim_split[0]+sim_split[1]) * N_final)]
-            test_inds = np.arange(N_final)[int((sim_split[0]+sim_split[1]) * N_final):]
+#     #Save data in torch pt file
+#     if dataset.type == 'sim':
+#         N_final = len(tracks_cum) #tracks_cum.shape[0]
+#         if shuffle:
+#             print("Shuffling") #Note: NEED shuffling for unpolarized (simulated) dataset
+#             train_inds, val_inds, test_inds = tvt_random_split(np.arange(N_final), fracs=sim_split)
+#         else:
+#             print("Not shuffling")
+#             train_inds = np.arange(N_final)[:int(sim_split[0] * N_final)]
+#             val_inds = np.arange(N_final)[int(sim_split[0] * N_final):int((sim_split[0]+sim_split[1]) * N_final)]
+#             test_inds = np.arange(N_final)[int((sim_split[0]+sim_split[1]) * N_final):]
 
-        tracks_cum_train = [torch.from_numpy(tracks_cum[idx]) for idx in train_inds]
-        tracks_cum_val = [torch.from_numpy(tracks_cum[idx]) for idx in val_inds]
-        tracks_cum_test = [torch.from_numpy(tracks_cum[idx]) for idx in test_inds]
+#         tracks_cum_train = [torch.from_numpy(tracks_cum[idx]) for idx in train_inds]
+#         tracks_cum_val = [torch.from_numpy(tracks_cum[idx]) for idx in val_inds]
+#         tracks_cum_test = [torch.from_numpy(tracks_cum[idx]) for idx in test_inds]
 
-        train_meanE = torch.mean(energy_cum[train_inds], dim=0)
-        train_stdE = torch.std(energy_cum[train_inds], dim=0)
-        train_mean, train_std = sparse_mean(tracks_cum_train, n_pixels)
-        torch.save( (train_mean, train_std), sq_output_file_train + "ZN.pt")
-        torch.save( (train_meanE, train_stdE), sq_output_file_train + "ZNE.pt")
+#         train_meanE = torch.mean(energy_cum[train_inds], dim=0)
+#         train_stdE = torch.std(energy_cum[train_inds], dim=0)
+#         train_mean, train_std = sparse_mean(tracks_cum_train, n_pixels)
+#         torch.save( (train_mean, train_std), sq_output_file_train + "ZN.pt")
+#         torch.save( (train_meanE, train_stdE), sq_output_file_train + "ZNE.pt")
 
-        with open(sq_output_file_train + "tracks_full.pickle", "wb") as f:
-            pickle.dump(tracks_cum_train, f)
-        with open(sq_output_file_val + "tracks_full.pickle", "wb") as f:
-            pickle.dump(tracks_cum_val, f)
-        with open(sq_output_file_test + "tracks_full.pickle", "wb") as f:
-            pickle.dump(tracks_cum_test, f)
+#         with open(sq_output_file_train + "tracks_full.pickle", "wb") as f:
+#             pickle.dump(tracks_cum_train, f)
+#         with open(sq_output_file_val + "tracks_full.pickle", "wb") as f:
+#             pickle.dump(tracks_cum_val, f)
+#         with open(sq_output_file_test + "tracks_full.pickle", "wb") as f:
+#             pickle.dump(tracks_cum_test, f)
 
-        torch.save( (angles_cum[train_inds], moms_cum[train_inds], mom_phis_cum[train_inds], 
-                abs_cum[train_inds], mom_abs_cum[train_inds], energy_cum[train_inds], xy_abs_cum[train_inds]), sq_output_file_train + "labels_full.pt" )
-        torch.save( (angles_cum[val_inds], moms_cum[val_inds], mom_phis_cum[val_inds], 
-                abs_cum[val_inds], mom_abs_cum[val_inds], energy_cum[val_inds], xy_abs_cum[val_inds]), sq_output_file_val + "labels_full.pt" )
-        torch.save( (angles_cum[test_inds], moms_cum[test_inds], mom_phis_cum[test_inds], 
-                abs_cum[test_inds], mom_abs_cum[test_inds], energy_cum[test_inds], xy_abs_cum[test_inds]), sq_output_file_test + "labels_full.pt" )
+#         torch.save( (angles_cum[train_inds], moms_cum[train_inds], mom_phis_cum[train_inds], 
+#                 abs_cum[train_inds], mom_abs_cum[train_inds], energy_cum[train_inds], xy_abs_cum[train_inds]), sq_output_file_train + "labels_full.pt" )
+#         torch.save( (angles_cum[val_inds], moms_cum[val_inds], mom_phis_cum[val_inds], 
+#                 abs_cum[val_inds], mom_abs_cum[val_inds], energy_cum[val_inds], xy_abs_cum[val_inds]), sq_output_file_val + "labels_full.pt" )
+#         torch.save( (angles_cum[test_inds], moms_cum[test_inds], mom_phis_cum[test_inds], 
+#                 abs_cum[test_inds], mom_abs_cum[test_inds], energy_cum[test_inds], xy_abs_cum[test_inds]), sq_output_file_test + "labels_full.pt" )
 
 
-    else:
-        N_final = len(tracks_cum)
-        train_inds, test_inds = tt_random_split(np.arange(N_final), fracs=meas_split)
+#     else:
+#         N_final = len(tracks_cum)
+#         train_inds, test_inds = tt_random_split(np.arange(N_final), fracs=meas_split)
 
-        tracks_cum_train = [torch.from_numpy(tracks_cum[idx]) for idx in train_inds]
-        tracks_cum_test = [torch.from_numpy(tracks_cum[idx]) for idx in test_inds]
+#         tracks_cum_train = [torch.from_numpy(tracks_cum[idx]) for idx in train_inds]
+#         tracks_cum_test = [torch.from_numpy(tracks_cum[idx]) for idx in test_inds]
 
-        with open(sq_output_file_train + "tracks_full.pickle", "wb") as f:
-            pickle.dump(tracks_cum_train, f)
-        with open(sq_output_file_test + "tracks_full.pickle", "wb") as f:
-            pickle.dump(tracks_cum_test, f)
+#         with open(sq_output_file_train + "tracks_full.pickle", "wb") as f:
+#             pickle.dump(tracks_cum_train, f)
+#         with open(sq_output_file_test + "tracks_full.pickle", "wb") as f:
+#             pickle.dump(tracks_cum_test, f)
 
-        torch.save( (moms_cum[train_inds], mom_phis_cum[train_inds], mom_abs_pts[train_inds], 
-            torch.from_numpy(dataset.energy*np.ones_like(moms_cum))[train_inds], xy_abs_cum[train_inds] ), sq_output_file_train + "labels_full.pt" )
-        torch.save( (moms_cum[test_inds], mom_phis_cum[test_inds], mom_abs_pts[test_inds],
-            torch.from_numpy( dataset.energy*np.ones_like(moms_cum))[test_inds], xy_abs_cum[test_inds] ), sq_output_file_test + "labels_full.pt" )
-    print("Saved, ", sq_output_file_train, sq_output_file_test )
+#         torch.save( (moms_cum[train_inds], mom_phis_cum[train_inds], mom_abs_pts[train_inds], 
+#             torch.from_numpy(dataset.energy*np.ones_like(moms_cum))[train_inds], xy_abs_cum[train_inds] ), sq_output_file_train + "labels_full.pt" )
+#         torch.save( (moms_cum[test_inds], mom_phis_cum[test_inds], mom_abs_pts[test_inds],
+#             torch.from_numpy( dataset.energy*np.ones_like(moms_cum))[test_inds], xy_abs_cum[test_inds] ), sq_output_file_test + "labels_full.pt" )
+#     print("Saved, ", sq_output_file_train, sq_output_file_test )
 
 
 if __name__ == '__main__':

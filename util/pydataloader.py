@@ -19,53 +19,38 @@ class H5Dataset(Dataset):
         self.datatype = datatype
         self.transform = transform
         self.dir = dirr
-        n_pixels = 50
+        self.pixels = 50
 
         print("Loading full dataset into memory\n")
         with open(self.dir + "tracks_full.pickle", "rb") as f:
             tracks_all = pickle.load(f)
         data_all = torch.load(self.dir + "labels_full.pt")
-        print("Dataset size: ", data_all[0].shape)
 
+        self.moms = data_all["moms"]
+        self.mom_phis = data_all["mom_phis"]
+        self.xy_abs_pts = data_all["xy_abs"]
+        self.mom_abs_pts = torch.mean(data_all["mom_abs"], axis=2) / self.pixels
+        self.tracks_cube = tracks_all
+        self.length = len(self.tracks_cube)
+        print("Dataset size: ", self.length)
+        
         if datatype =='sim':
-            self.tracks_cube = tracks_all
-            self.angles = data_all[0]
-            self.moms = data_all[1]
-            self.xy_abs_pts = data_all[-1]
+            self.angles = data_all["angles"]
+            self.abs_pts = torch.mean(data_all["abs"], axis=2) / self.pixels
+            self.zs = data_all["z"]
 
-            #TODO: Save energy std and mean as fixed for the training dataset
             if energy_cal:
-                #self.energy = (data_all[6] - torch.mean(data_all[6]) ) / torch.std(data_all[6]) #(data_all[6] - torch.min(data_all[6]) ) / (torch.max(data_all[6]) 
-                            #- torch.min(data_all[6]) )
-                self.energy = (data_all[5] - energy_cal[0]) / energy_cal[1]
+                self.energy = (data_all["energy"] - energy_cal[0]) / energy_cal[1]
             else:
-                self.energy = (data_all[5] - torch.min(data_all[5]) ) / (torch.max(data_all[5]) - torch.min(data_all[5]) )
+                raise("No energy calibration!")
 
-            self.mom_phis = data_all[2]
-            self.abs_pts = torch.mean(data_all[3], axis=2) / n_pixels
-            self.mom_abs_pts = torch.mean(data_all[4], axis=2) / n_pixels
-            if (losstype == 'CE'):
-                self.angles = self.angles.numpy()              
-                self.angles = np.arctan2(self.angles[:,:,1], self.angles[:,:,0])
-                self.angles = torch.from_numpy( np.digitize((180 / np.pi) * self.angles + 180, bins=np.linspace(60,360.01,6) ) )
-            elif (losstype == "mserrall1" or losstype == "mserrall2"):
+            if (losstype == "mserrall1" or losstype == "mserrall2"):
                 self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
                                 self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
-            # elif (losstype == "mserrall2"):
-            #     self.angles = torch.stack((torch.cos(2*self.angles),torch.sin(2*self.angles), torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
-            #                     self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
             elif (losstype == "mserr"):
                 self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
         else:
-            self.tracks_cube = tracks_all
             self.angles = torch.zeros(len(self.tracks_cube), 3, 5).float()
-            self.moms = data_all[0]
-            self.mom_phis = data_all[1]
-            self.mom_abs_pts = torch.mean(data_all[2], axis=2) / n_pixels
-            self.xy_abs_pts = data_all[-1]
-
-        self.length = len(self.tracks_cube)
-        self.pixels = n_pixels
     
     def __getitem__(self, index):
         sparse = self.tracks_cube[index]
