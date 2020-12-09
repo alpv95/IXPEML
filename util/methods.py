@@ -291,7 +291,7 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     abs_pts = triple_angle_reshape(abs_pts,N, augment=aug)
     abs_pts_sim = triple_angle_reshape(abs_pts_sim,N, augment=aug)
     mom_abs_pts = triple_angle_reshape(mom_abs_pts,N, augment=aug)
-    zs = triple_angle_reshape(mom_abs_pts, N, augment=1)
+    zs = triple_angle_reshape(zs, N, augment=1)
 
     xy_abs_pts = np.reshape(xy_abs_pts, [-1,2,N], "C")[:,:,0]
     abs_pts = np.mean(np.reshape(abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
@@ -304,32 +304,43 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     if aug == 3:
         ang = triple_angle_rotate(ang)
 
+    errors_epis = circular_std(ang, axis=(1,2))
+    pi_fix = ((ang[:,0,0] >= np.pi/2) + (ang[:,0,0] < -np.pi/2)) * np.pi
+    ang = pi_pi(circular_mean(ang, axis=(1,2)) + pi_fix)
+    error = np.sqrt(error.T**2/4 + errors_epis**2).T
+    error = np.sqrt(np.mean(error**2,axis=(1,2)))
+
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, zs, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], zs, xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], zs[:,0,0], xy_abs_pts)
     return A
 
-def fits_save(results, file):
+def fits_save(results, file, datatype):
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
     energies, energies_sim, zs, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
     hdul = fits.HDUList([hdu])
+    print(angles.shape)
+    c1 = fits.Column(name='NN_PHI', array=angles, format='E')
+    c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='E',)
+    c4 = fits.Column(name='MOM', array=moms, format='E',)
+    c5 = fits.Column(name='NN_SIGMA', array=errors, format='E')
+    c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
+    c7 = fits.Column(name='MOM_ABS', array=mom_abs_pts, format='2E', dim='(2)')
+    c8 = fits.Column(name='XY_MOM_ABS', array=xy_abs_pts, format='2E', dim='(2)')
+    c12 = fits.Column(name='XY_NN_ABS', array=square2hex_abs(abs_pts, mom_abs_pts, xy_abs_pts), format='2E', dim='(2)')
+    c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
 
-    c1 = fits.Column(name='NN_PHI', array=angles, format='K')
-    c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='K')
-    c3 = fits.Column(name='PHI', array=angles_sim, format='K')
-    c4 = fits.Column(name='MOM', array=moms, format='K')
-    c5 = fits.Column(name='NN_SIGMA', array=errors, format='K')
-    c6 = fits.Column(name='NN_ABS', array=abs_pts, format='K')
-    c7 = fits.Column(name='MOM_ABS', array=mom_abs_pts, format='K')
-    c8 = fits.Column(name='ABS', array=abs_pts_sim + zs, format='K')
-    c9 = fits.Column(name='ENERGY', array=energies_sim, format='K')
-    c0 = fits.Column(name='NN_ENERGY', array=energies, format='K')
-    table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c0])
+    if datatype == 'sim':
+        c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
+        c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
+        c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
+        c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13])
+    else:
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12])
+
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits')
-
-    values = np.arange(2*2*4).reshape(4, 2, 2)
-    c3 = fits.Column(name='intarray', format='4I', dim='(2, 2)', array=values)

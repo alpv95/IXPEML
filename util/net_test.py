@@ -23,6 +23,7 @@ from torchvision import transforms
 from scipy.optimize import minimize 
 import pandas as pd
 from ipopt import minimize_ipopt
+from scipy.optimize import minimize_scalar
 from astropy.io import fits
 from util.methods import *
 
@@ -36,8 +37,6 @@ class NetTest(object):
 
     def __init__(self, nets=[], datasets=[], fitmethod="stokes", plot=False, n_nets=1, cut=0.815, datatype="sim",
                 save_table=None, input_channels=1, stokes_correct=None):
-        if not nets or not datasets:
-            print("WARNING: No Networks or datasets to test!")
  
         self.method = fitmethod
         self.plot = plot
@@ -265,19 +264,8 @@ class NetTest(object):
                     mu_err.append(errmu)
                     phi0_err.append(errphi0)
 
-                    # if i == 0:
-                    #     mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N,net=True))
-                    #     phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N,net=True))
-                    # else:
-                    #     mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N))
-                    #     phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N))
-
 
                 elif method == "weighted_MLE":
-                    angle = np.ndarray.flatten(np.array(angle))
-                    N = len(angle)
-                    Q = sum(np.cos(2*angle)) / N
-                    U = sum(np.sin(2*angle)) / N     
 
                     if errors[0] is None or i>0:
                         error = np.ones_like(angle)
@@ -292,20 +280,13 @@ class NetTest(object):
                         phi0.append(np.arctan2(U,Q)/2) 
 
                     else:
-                        error = np.ndarray.flatten(np.array(errors))
-                       
-                        x0 = (0.1,0.5)
-                        cs = np.stack([np.cos(2*angle),np.sin(2*angle)],axis=1)
-                        loglike_ipopt = lambda x: -np.sum((1 / error**error_weight) * np.log(1 + cs@x))
-                        res = minimize_ipopt(loglike_ipopt, x0=x0, bounds=((-1,1),(-1,1)), tol=1e-6)
-                        mu.append(np.linalg.norm(res['x'])), phi0.append(np.arctan2(res['x'][1], res['x'][0]) / 2)        
-                        #For now calculate errors using stokes format
+                        mu_holder, phi_holder, _ = weighted_stokes(angle, 1/errors, error_weight)
+                        mu.append(mu_holder)
+                        phi0.append(phi_holder)       
 
                     errmu, errphi0, _ = self._MLError(angle, mu[i], phi0[i])
                     mu_err.append(errmu)
                     phi0_err.append(errphi0)
-                    # mu_err.append(self._mu_error_stokes(Q,U,mu[i],phi0[i],N))
-                    # phi0_err.append(self._phi_error_stokes(Q,U,mu[i],phi0[i],N))
                 else:
                     raise("Method not recognized")
 
@@ -408,17 +389,10 @@ class NetTest(object):
             mu, phi0, mu_err, phi0_err = self.fit_mod(results, method=self.method)
             mu_w, phi0_w, mu_err_w, phi0_err_w = self.fit_mod(results, method="weighted_MLE")
  
-            #TODO: FITS file final data form
-            #TODO: combine aleatoric and epistemic errors here 
             if self.save_table is not None:
-                fits_save(results, )
-
-
                 name = data.replace(self.data_base,"") + "__" + self.save_table + "__" + "ensemble"
-                pickle.dump(results, open(os.path.join(self.save_base, name.replace("/","_") + ".pickle"),"wb"))
-                print("Saved to: {}".format(os.path.join(self.save_base, name.replace("/","_") + ".pickle"))) 
-
-
+                fits_save(results, os.path.join(self.save_base, name.replace("/","_")), self.datatype)
+                print("Saved to: {}".format(os.path.join(self.save_base, name.replace("/","_") + ".fits"))) 
 
             if self.plot:
                 self.plot_save( results, mu, phi0, name )
