@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH --job-name=BUILD
-#SBATCH --time=200:00
+#SBATCH --time=170:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=12
 #SBATCH --mem-per-cpu=15G
@@ -18,6 +18,6 @@ ml py-matplotlib/2.1.2_py36
 #srun python3 run_build_fitsdata.py /scratch/groups/kipac/alpv95/data/gen2a/ data/expanded/recon$SLURM_ARRAY_TASK_ID
 #srun python3 run_build_fitsdata.py /scratch/groups/kipac/alpv95/data/GPD_EM_data/GPD_EM_6p4keV/ data/expanded/recon -meas
 #srun python3 run_build_fitsdata.py /scratch/groups/rwr/alpv95/data/gen2a_5/ data/expanded/recon_5
-srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/training733 /home/users/alpv95/khome/tracksml/data/expanded/paper_plot733 --augment 3 --shift 2 --Erange 6.4 6.4 --fraction 0.06 --pl 0 --shuffle
+srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_pol /home/users/alpv95/khome/tracksml/data/expanded/733pol_flat_Z --Erange 1.0 9.0 --fraction 0.01 --pl 0
 #python3 run_build_fitsdata.py /scratch/groups/rwr/alpv95/data/gen4_test data/expanded/final_6p4_unpol --augment 1 --shift 2
 #srun python3 run_build_fitsdata.py /scratch/groups/rwr/alpv95/data/gen4_test/ data/expanded/ -meas
