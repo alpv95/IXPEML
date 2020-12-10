@@ -22,7 +22,6 @@ from formats.sparse_hex import SparseHexTracks, SparseHexSimTracks
 from torchvision import transforms
 from scipy.optimize import minimize 
 import pandas as pd
-from ipopt import minimize_ipopt
 from scipy.optimize import minimize_scalar
 from astropy.io import fits
 from util.methods import *
