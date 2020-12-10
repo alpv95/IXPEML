@@ -6,7 +6,6 @@ import numpy as np
 import multiprocess as mp
 from itertools import tee
 import torch
-from ipopt import minimize_ipopt
 from scipy.optimize import minimize
 from scipydirect import minimize as minimize_direct
 from scipy.stats import norm
