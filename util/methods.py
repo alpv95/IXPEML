@@ -274,6 +274,15 @@ def sparse2dense(sparse_tracks, n_pixels=50):
 
     return torch.stack(dense_tracks)
 
+def error_combine(ang, error):
+    errors_epis = circular_std(ang, axis=(1,2))
+    error = np.sqrt(error.T**2/4 + errors_epis**2).T
+    return np.sqrt(np.mean(error**2,axis=(1,2)))
+
+def pi_ambiguity_mean(ang):
+    pi_fix = (np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2)) >= 0.5) * np.pi
+    return pi_pi(circular_mean(ang, axis=(1,2)) + pi_fix)
+
 def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     '''
     Takes output from gpu_test ensemble and re-rotates 3-fold angles appropriately. Also removes repeated outputs for moments.
@@ -304,11 +313,9 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     if aug == 3:
         ang = triple_angle_rotate(ang)
 
-    errors_epis = circular_std(ang, axis=(1,2))
-    pi_fix = ((ang[:,0,0] >= np.pi/2) + (ang[:,0,0] < -np.pi/2)) * np.pi
-    ang = pi_pi(circular_mean(ang, axis=(1,2)) + pi_fix)
-    error = np.sqrt(error.T**2/4 + errors_epis**2).T
-    error = np.sqrt(np.mean(error**2,axis=(1,2)))
+    #combine epistemic and aleatoric errors and average angles
+    error = error_combine(ang, error)
+    ang = pi_ambiguity_mean(ang)
 
     if datatype == "meas":
         A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, zs, xy_abs_pts)
