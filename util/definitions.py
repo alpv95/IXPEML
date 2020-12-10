@@ -116,8 +116,7 @@ ensembles = { "pol_only": ['final_MSERRALL_PL2_aug1_lowreg_alpha1/models/mom_102
  '733flat1_mserrall2_expectile3_alpha1/models/RLRP_512_171.ptmodel',
  '733flat2_mserrall2_expectile3_alpha1/models/mom_2048_151.ptmodel',
  '733flat1_mserrall2_expectile3_alpha1/models/RLRP_1024_171.ptmodel',
- '733flat1_mserrall2_expectile3_alpha1/models/RLRP_2048_151.ptmodel',
- '733flat2_mserrall2_expectile3_alpha1/models/RLRP_2048_191.ptmodel',],
+ '733flat1_mserrall2_expectile3_alpha1/models/RLRP_2048_151.ptmodel',],
 
  
       "flat_weight_test": ['733flat1_mserrall2_expectileHuber_alpha0p8/models/RLRP_512_191.ptmodel',
