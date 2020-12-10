@@ -224,7 +224,7 @@ def Neff_fit(mus, phis, mle, Nbound=2e6, plot=False, pol=False):
         starts = [mle, (100000,0.5, 0),(1000,0.6,1),(40000,0.2,-1),(10000,0.3,0),(400000,1.0,1),(1000000,0.7,0),(1500000,0.8,1)]
         
     for x0 in starts:
-        res.append(minimize(loglike_ipopt,x0,method="Nelder-Mead"))
+        res.append(minimize(loglike_ ,x0,method="Nelder-Mead"))
         res.append(minimize_ipopt(loglike_ipopt, x0=x0, bounds=bounds, tol=1e-7))
     res.append(minimize_direct(loglike_ipopt, bounds=bounds,))
     Neff = [r["x"] for r in res if r["x"][1] >= 0.][np.argmin([r["fun"] for r in res if r["x"][1] >= 0.])] #return solution with minimum likelihood
@@ -275,7 +275,7 @@ def sparse2dense(sparse_tracks, n_pixels=50):
 
 def error_combine(ang, error):
     errors_epis = circular_std(ang, axis=(1,2))
-    error = np.sqrt(error.T**2/4 + errors_epis**2).T
+    error = np.sqrt(error.T**2 + 4*errors_epis**2).T
     return np.sqrt(np.mean(error**2,axis=(1,2)))
 
 def pi_ambiguity_mean(ang):
@@ -328,7 +328,6 @@ def fits_save(results, file, datatype):
 
     hdu = fits.PrimaryHDU()
     hdul = fits.HDUList([hdu])
-    print(angles.shape)
     c1 = fits.Column(name='NN_PHI', array=angles, format='E')
     c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='E',)
     c4 = fits.Column(name='MOM', array=moms, format='E',)
