@@ -48,8 +48,6 @@ parser.add_argument('--meas_e', type=float,
                     help='Energy of measured tracks in kev')
 parser.add_argument('-pulse','--pulse_cut', action='store_true',
                     help='Whether to cut data about the maximum in the pulse height spectrum as in calibration documents')
-parser.add_argument('--shuffle', action='store_true',
-                    help='Whether to shuffle tracks from their original fits file order')
 args = parser.parse_args()
 
 
@@ -163,14 +161,14 @@ class simulated(builder):
 
     def save(self, split, split_func):
         train_inds = super().save(split, split_func)
+        if (self.augment == 1): #for training set
+            train_meanE = torch.mean(self.build_result["energy"][train_inds], dim=0)
+            train_stdE = torch.std(self.build_result["energy"][train_inds], dim=0)
+            tracks_cum_train = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in train_inds]
+            train_mean, train_std = sparse_mean(tracks_cum_train, self.n_pixels)
 
-        train_meanE = torch.mean(self.build_result["energy"][train_inds], dim=0)
-        train_stdE = torch.std(self.build_result["energy"][train_inds], dim=0)
-        tracks_cum_train = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in train_inds]
-        train_mean, train_std = sparse_mean(tracks_cum_train, self.n_pixels)
-
-        torch.save( (train_mean, train_std), os.path.join(self.out_base,'train/ZN.pt'))
-        torch.save( (train_meanE, train_stdE), os.path.join(self.out_base,'train/ZNE.pt'))
+            torch.save( (train_mean, train_std), os.path.join(self.out_base,'train/ZN.pt'))
+            torch.save( (train_meanE, train_stdE), os.path.join(self.out_base,'train/ZNE.pt'))
 
 
 class measured(builder):
