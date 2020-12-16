@@ -27,6 +27,7 @@ class H5Dataset(Dataset):
         data_all = torch.load(self.dir + "labels_full.pt")
 
         self.moms = data_all["moms"]
+        self.mom_energy = data_all["mom_energy"]
         self.mom_phis = data_all["mom_phis"]
         self.xy_abs_pts = data_all["xy_abs"]
         self.mom_abs_pts = torch.mean(data_all["mom_abs"], axis=2) / self.pixels

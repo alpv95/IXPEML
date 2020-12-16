@@ -71,7 +71,8 @@ class builder(object):
         self.out_files = []
 
         self.build_result = {"tracks": [], "mom_phis": torch.zeros( (self.total, self.augment) ), "moms": torch.zeros( self.total, self.augment ),
-                             "mom_abs": torch.zeros( (self.total, self.augment, self.shift, 2) ), "xy_abs": torch.zeros( (self.total, 2) )}
+                             "mom_abs": torch.zeros( (self.total, self.augment, self.shift, 2) ), "xy_abs": torch.zeros( (self.total, 2) ), 
+                             "mom_energy": torch.zeros( self.total)}
 
     def init_build(self, input_file, pulse_cut):
         with fits.open(input_file, memmap=False) as hdu:
@@ -96,6 +97,12 @@ class builder(object):
             print("Saved, ", save_file )
         
         return indxs[0]
+
+    def predict_energy(self, pha):
+        """predicts track energies from PHAs using a Linear model"""
+        # beta = np.array([0.00029353, 0.06787126]) #Huber Loss function
+        beta_ls = np.array([0.00029483, 0.05735115])
+        return pha * beta_ls[0] + beta_ls[1]
 
 
 class simulated(builder):
@@ -134,11 +141,12 @@ class simulated(builder):
 
             moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
             Zs = sim_data['ABS_Z'][cut].astype(np.float32)
+            mom_energies = super().predict_energy(data['PHA'][cut])
             mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
             bars = np.column_stack((data['BARX'],data['BARY']))[cut]
             abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
             hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-                                            sim_data['PE_PHI'][cut], abs_pts, moms, data['DETPHI'][cut], 
+                                            sim_data['PE_PHI'][cut], abs_pts, moms, mom_energies, data['DETPHI'][cut], 
                                             mom_abs_pts, bars, Zs)
 
             print(hex_tracks.n_tracks,"loaded ok")
@@ -150,6 +158,7 @@ class simulated(builder):
             self.build_result["angles"][cur_idx : (cur_idx + n_train_final)] = angles 
             self.build_result["mom_phis"][cur_idx : (cur_idx + n_train_final)] = mom_phis
             self.build_result["moms"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
+            self.build_result["mom_energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_energy)
             self.build_result["abs"][cur_idx : (cur_idx + n_train_final)] = abs_pts 
             self.build_result["mom_abs"][cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
             self.build_result["energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
@@ -190,10 +199,11 @@ class measured(builder):
         data, cut = super().init_build(input_file, pulse_cut)
 
         moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
+        mom_energies = super().predict_energy(data['PHA'][cut])
         mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
         bars = np.column_stack((data['BARX'],data['BARY']))[cut]
         hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-                                         moms, data['DETPHI'][cut], mom_abs_pts, bars) 
+                                         moms, mom_energies, data['DETPHI'][cut], mom_abs_pts, bars) 
         print(hex_tracks.n_tracks,"loaded ok")
         hex_tracks = hex_tracks[np.arange(self.total)]
                     
@@ -202,6 +212,7 @@ class measured(builder):
         self.build_result["tracks"].extend(tracks)
         self.build_result["mom_phis"][:self.total] = mom_phis.unsqueeze(1)
         self.build_result["moms"][:self.total] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
+        self.build_result["mom_energy"][:self.total] = torch.from_numpy(hex_tracks.mom_energy)
         self.build_result["mom_abs"][:self.total] = mom_abs_pts 
         self.build_result["xy_abs"][:self.total] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
 
@@ -224,7 +235,7 @@ def main():
             datasets.append(Dataset('gen4', round(energy, 1), None, 'pol', 'sim'))
 
         if args.aeff:
-            aeff = lambda E: Aeff(E)
+            aeff = lambda E: paper_spec(E)
         else:
             aeff = lambda E: 1
 
