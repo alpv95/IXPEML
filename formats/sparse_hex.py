@@ -9,7 +9,7 @@ class SparseHexTracks:
     are implemented. Now includes the Moment analysis output parameters for each track.
     """
 
-    def __init__(self, xs, ys, Qs, moms, mom_phis, mom_abs_pts, bars):
+    def __init__(self, xs, ys, Qs, moms, mom_energies, mom_phis, mom_abs_pts, bars):
         """Construct by feeding lists of x,y,Q components - corresponding entries are the same track. xs, ys, and Qs
         can be lists of ndarrays or 2d ndarrays already.
         """
@@ -23,6 +23,7 @@ class SparseHexTracks:
             self.y = None
             self.Q = None
             self.mom = None
+            self.mom_energy = None
             self.mom_phi = None
             self.mom_abs_pt = None
             self.bar = None
@@ -31,11 +32,12 @@ class SparseHexTracks:
             return
 
         # Handle construction from 2d ndarrays already
-        if type(xs) == np.ndarray and type(ys) == np.ndarray and type(Qs) == np.ndarray and type(moms) == np.ndarray and type(mom_phis) == np.ndarray:
+        if type(xs) == np.ndarray and type(ys) == np.ndarray and type(Qs) == np.ndarray and type(moms) == np.ndarray and type(mom_phis) == np.ndarray and type(mom_energies) == np.ndarray:
             self.x = xs
             self.y = ys
             self.Q = Qs
             self.mom = moms
+            self.mom_energy = mom_energies
             self.mom_phi = mom_phis
             self.mom_abs_pt = mom_abs_pts
             self.bar = bars
@@ -64,17 +66,19 @@ class SparseHexTracks:
         Q = np.zeros((n_tracks, n_max_pixels), dtype=np.int16)  # sentinel value = -1
         Q[:] = -1
         mom = np.zeros(n_tracks, dtype=np.float32)
+        mom_energy = np.zeros(n_tracks, dtype=np.float32)
         mom_phi = np.zeros(n_tracks, dtype=np.float32)
         mom_abs_pt = np.zeros((n_tracks, 2), dtype=np.float32)
         bar = np.zeros((n_tracks, 2), dtype=np.float32)
 
         # Fill in those arrays
-        for i, (x_, y_, Q_, mom_, mom_phi_, mom_abs_pt_, bar_) in enumerate(zip(xs, ys, Qs, moms, mom_phis, mom_abs_pts, bars)):
+        for i, (x_, y_, Q_, mom_, mom_energy_, mom_phi_, mom_abs_pt_, bar_) in enumerate(zip(xs, ys, Qs, moms, mom_energies, mom_phis, mom_abs_pts, bars)):
             n = x_.size
             x[i, :n] = x_
             y[i, :n] = y_
             Q[i, :n] = Q_
             mom[i, :n] = mom_
+            mom_energy[i, :n] = mom_energy_
             mom_phi[i, :n] = mom_phi_
             mom_abs_pt[i, :n] = mom_abs_pt_
             bar[i, :n] = bar_
@@ -83,6 +87,7 @@ class SparseHexTracks:
         self.y = y
         self.Q = Q
         self.mom = mom
+        self.mom_energy = mom_energy
         self.mom_phi = mom_phi
         self.mom_abs_pt = mom_abs_pt
         self.bar = bar
@@ -102,10 +107,11 @@ class SparseHexTracks:
             ys = self.y[i, :]
             Qs = self.Q[i, :]
             moms = self.mom[i]
+            mom_energies = self.mom_energy[i]
             mom_phis = self.mom_phi[i]
             mom_abs_pts = self.mom_abs_pt[i,:]
             bars = self.bar[i,:]
-            return SparseHexTracks(xs, ys, Qs, moms, mom_phis, mom_abs_pts, bars)
+            return SparseHexTracks(xs, ys, Qs, moms, mom_energies, mom_phis, mom_abs_pts, bars)
 
         # Single integer index and iteration returns a single value
         if i == self.n_tracks:
@@ -115,10 +121,11 @@ class SparseHexTracks:
         y = self.y[i, :]
         Q = self.Q[i, :]
         mom = self.mom[i]
+        mom_energy = self.mom_energy[i]
         mom_phi = self.mom_phi[i]
         mom_abs_pt = self.mom_abs_pt[i,:]
         bar = self.bar[i,:]
-        return SparseHexTrack(x, y, Q, mom, mom_phi, mom_abs_pt, bar)
+        return SparseHexTrack(x, y, Q, mom, mom_energy, mom_phi, mom_abs_pt, bar)
 
     def save(self, filename=None, f=None):
         """Save to HDF5 file. Either specify a filename to save a single object or f to save multiple objects"""
@@ -177,7 +184,7 @@ class SparseHexTracks:
 class SparseHexTrack:
     """A single x,y,Q track in sparse coordinates"""
 
-    def __init__(self, x, y, Q, mom, mom_phi, mom_abs_pt, bar):
+    def __init__(self, x, y, Q, mom, mom_energy, mom_phi, mom_abs_pt, bar):
         """Build from separate x, y, and Q arrays. Expects that sentinel values are not present."""
         n_pixels = Q.size
         assert x.size == n_pixels
@@ -187,6 +194,7 @@ class SparseHexTrack:
         self.y = y
         self.Q = Q
         self.mom = mom
+        self.mom_energy = mom_energy
         self.mom_phi = mom_phi
         self.mom_abs_pt = mom_abs_pt
         self.bar = bar
@@ -195,14 +203,14 @@ class SparseHexTrack:
 class SparseHexSimTracks(SparseHexTracks):
     """SparseHexTracks augmented with simulation-only data."""
 
-    def __init__(self, xs, ys, Qs, angles, absorption_points, moms, mom_phis, mom_abs_pts, bars, zs):
+    def __init__(self, xs, ys, Qs, angles, absorption_points, moms, mom_energies, mom_phis, mom_abs_pts, bars, zs):
         """Construct augmented sparse hex tracks
 
         Args:
             angles: n_tracks ndarray of float32
             absorption_points: n_tracks x 3 ndarray of float32, each row is x,y,z
         """
-        super().__init__(xs, ys, Qs, moms, mom_phis, mom_abs_pts, bars)
+        super().__init__(xs, ys, Qs, moms, mom_energies, mom_phis, mom_abs_pts, bars)
 
         assert angles.size == self.n_tracks
         self.angles = angles
@@ -224,13 +232,14 @@ class SparseHexSimTracks(SparseHexTracks):
             ys = self.y[i, :]
             Qs = self.Q[i, :]
             moms = self.mom[i]
+            mom_energies = self.mom_energy[i]
             mom_phis = self.mom_phi[i]
             mom_abs_pts = self.mom_abs_pt[i,:]
             bars = self.bar[i,:]
             angles = self.angles[i]
             absorption_points = self.absorption_points[i, :]
             zs = self.zs[i]
-            return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points, moms, mom_phis, mom_abs_pts, bars, zs)
+            return SparseHexSimTracks(xs, ys, Qs, angles, absorption_points, moms, mom_energies, mom_phis, mom_abs_pts, bars, zs)
 
         # Single integer index and iteration returns a single value
         if i == self.n_tracks:
@@ -239,7 +248,7 @@ class SparseHexSimTracks(SparseHexTracks):
         x = self.x[i, :n]
         y = self.y[i, :n]
         Q = self.Q[i, :n]
-        return SparseHexSimTrack(x, y, Q, self.angles[i], self.absorption_points[i, :], self.mom[i], self.mom_phi[i], self.mom_abs_pt[i,:], self.bar[i,:], self.zs[i])
+        return SparseHexSimTrack(x, y, Q, self.angles[i], self.absorption_points[i, :], self.mom[i], self.mom_energy[i], self.mom_phi[i], self.mom_abs_pt[i,:], self.bar[i,:], self.zs[i])
 
     def save(self, filename=None, f=None):
         """Save to HDF5 file. Either specify a filename to save a single object or f to save multiple objects"""
@@ -317,8 +326,8 @@ class SparseHexSimTracks(SparseHexTracks):
 class SparseHexSimTrack(SparseHexTrack):
     """SparseHexTrack augmented with simulation-only data."""
 
-    def __init__(self, x, y, Q, angle, absorption_point, mom, mom_phi, mom_abs_pt, bar, z):
-        super().__init__(x, y, Q, mom, mom_phi, mom_abs_pt, bar)
+    def __init__(self, x, y, Q, angle, absorption_point, mom, mom_energy, mom_phi, mom_abs_pt, bar, z):
+        super().__init__(x, y, Q, mom, mom_energy, mom_phi, mom_abs_pt, bar)
 
         self.angle = angle
         self.absorption_point = absorption_point

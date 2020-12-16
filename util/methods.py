@@ -5,6 +5,7 @@ import os
 import numpy as np
 import multiprocess as mp
 from itertools import tee
+import pandas as pd
 import torch
 from scipy.optimize import minimize
 from scipydirect import minimize as minimize_direct
@@ -55,15 +56,28 @@ def Aeff(E):
         Arguments: E (kev)
     '''
     try:
-        area = np.loadtxt("notebooks/Rev_IXPE_Mirror_Aeff.txt")
+        area = np.loadtxt("notebooks/MMA_cal-eff-area_20200831.txt")[:,(0,-1)]
         eff1 = np.loadtxt("notebooks/du_efficiency_687mbar.txt")
     except OSError:
-        area = np.loadtxt("Rev_IXPE_Mirror_Aeff.txt")
+        area = np.loadtxt("MMA_cal-eff-area_20200831.txt")[:,(0,-1)]
         eff1 = np.loadtxt("du_efficiency_687mbar.txt")
-    afactor = (eff1[:,1] * area[:,1] * 3 * 
-                0.04 * 10**(-10)/ (1.6022e-9))
-    idx = np.argmin(abs(eff1[:,0] - E))
-    return afactor[idx]
+
+    return np.interp(E, area[:,0],area[:,1]) * np.interp(E, eff1[:,0],eff1[:,1])
+
+def paper_spec(E):
+    '''Spectrum of energies for paper plots
+    '''
+    try:
+        df_peri = pd.read_csv('notebooks/data/IXPE_tstspec/GX301_peri.txt',delim_whitespace=True)
+        df_quad = pd.read_csv('notebooks/data/IXPE_tstspec/GX301_quad.txt',delim_whitespace=True)
+        df_isp = pd.read_csv('notebooks/data/IXPE_tstspec/ISP.txt',delim_whitespace=True)
+    except OSError:
+        df_peri = pd.read_csv('data/IXPE_tstspec/GX301_peri.txt',delim_whitespace=True)
+        df_quad = pd.read_csv('data/IXPE_tstspec/GX301_quad.txt',delim_whitespace=True)
+        df_isp = pd.read_csv('data/IXPE_tstspec/ISP.txt',delim_whitespace=True)
+
+    return np.maximum.reduce([np.interp(E, df_peri['ee'], df_peri['z']), np.interp(E, df_quad['ee'], 
+                df_quad['z']), np.interp(E, df_isp['ee'], df_isp['z'])]) * Aeff(E)
 
 def Aeff_train(E):
     '''Effective area as a function of energy at 687mbar
@@ -287,12 +301,13 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     Takes output from gpu_test ensemble and re-rotates 3-fold angles appropriately. Also removes repeated outputs for moments.
     '''
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, zs, xy_abs_pts = angles_tuple
+    energies, energies_sim, energies_mom, zs, xy_abs_pts = angles_tuple
 
     ang = triple_angle_reshape(angles, N, augment=aug)
     mom = triple_angle_reshape(moms,N, augment=aug)
     E = triple_angle_reshape(energies_sim,N, augment=aug)
     E_nn = triple_angle_reshape(energies,N, augment=aug)
+    E_mom = triple_angle_reshape(energies_mom,N, augment=1)
     error = triple_angle_reshape(errors,N, augment=aug)
     ang_mom = triple_angle_reshape(angles_mom,N, augment=aug)
     ang_sim = triple_angle_reshape(angles_sim,N, augment=aug)
@@ -317,35 +332,36 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     ang = pi_ambiguity_mean(ang)
 
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, zs, xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom, zs, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], zs[:,0,0], xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom, zs[:,0,0], xy_abs_pts)
     return A
 
 def fits_save(results, file, datatype):
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, zs, xy_abs_pts = results
+    energies, energies_sim, energies_mom, zs, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
     hdul = fits.HDUList([hdu])
     c1 = fits.Column(name='NN_PHI', array=angles, format='E')
     c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='E',)
-    c4 = fits.Column(name='MOM', array=moms, format='E',)
+    c4 = fits.Column(name='MOM_ELLIP', array=moms, format='E',)
     c5 = fits.Column(name='NN_SIGMA', array=errors, format='E')
     c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
     c7 = fits.Column(name='MOM_ABS', array=mom_abs_pts, format='2E', dim='(2)')
     c8 = fits.Column(name='XY_MOM_ABS', array=xy_abs_pts, format='2E', dim='(2)')
     c12 = fits.Column(name='XY_NN_ABS', array=square2hex_abs(abs_pts, mom_abs_pts, xy_abs_pts), format='2E', dim='(2)')
     c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
+    c14 = fits.Column(name='MOM_ENERGY', array=energies_mom, format='E')
 
     if datatype == 'sim':
         c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
         c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
         c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
         c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13])
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14])
     else:
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12])
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits')
