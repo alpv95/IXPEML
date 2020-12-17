@@ -332,9 +332,9 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     ang = pi_ambiguity_mean(ang)
 
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom, zs, xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], zs, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom, zs[:,0,0], xy_abs_pts)
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], zs[:,0,0], xy_abs_pts)
     return A
 
 def fits_save(results, file, datatype):
