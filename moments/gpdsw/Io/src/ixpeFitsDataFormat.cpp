@@ -99,7 +99,7 @@ void ixpeFitsDataFormat::addLvl1EventsFixedSizeFields(
 {
   ext.insertField("PAKTNUMB", "1J", " ", TINT);
   ext.insertField("TRG_ID", "1J", " ", TINT);
-  ext.insertField("SEC", "1K", " ", TLONGLONG);
+  ext.insertField("SEC", "1J", " ", TINT);
   ext.insertField("MICROSEC", "1J", " ", TINT);
   ext.insertField("TIME", "1D", " ", TDOUBLE);
   ext.insertField("LIVETIME", "1J", "", TINT);
@@ -227,6 +227,7 @@ ixpeFitsHeader ixpeFitsDataFormat::ixpeLvl1aEventsExtensionHeader()
   ixpeFitsHeaderSvc::addTrkFullKeyword(header);
   ixpeFitsHeaderSvc::addReconVersioKeyword(header);
   ixpeFitsHeaderSvc::addReconOptionsKeywords(header);
+  ixpeFitsHeaderSvc::addCalibrationFlagKeywords(header);
   return header;
 };
 
@@ -258,6 +259,7 @@ void ixpeFitsDataFormat::addLvl1aEventsFixedSizeFields(
 {
   ixpeFitsDataFormat::addLvl1EventsFixedSizeFields(ext);
   ext.insertField("STATUS", "16X", "", TBIT);
+  ext.insertField("STATUS2", "16X", "", TBIT);
   ext.insertField("NUM_CLU", "1I", "", TSHORT);
   ext.insertField("NUM_PIX", "1I", "", TSHORT);
   ext.insertField("EVT_FRA", "1E", "", TFLOAT);
@@ -265,7 +267,7 @@ void ixpeFitsDataFormat::addLvl1aEventsFixedSizeFields(
   ext.insertField("TRK_SIZE", "1I", "pixels", TSHORT);
   ext.insertField("TRK_BORD", "1I", "pixels", TSHORT);
   ext.insertField("PHA", "1J", "ADC counts", TINT);
-  ext.insertField("PI", "1E", "", TFLOAT);
+  ext.insertField("PHA_EQ", "1E", "", TFLOAT);
   ext.insertField("PHI1", "1E", "rad", TFLOAT);
   ext.insertField("PHI2", "1E", "rad", TFLOAT);
   ext.insertField("DETPHI", "1E", "rad", TFLOAT);
@@ -284,11 +286,11 @@ void ixpeFitsDataFormat::addLvl1aEventsFixedSizeFields(
 void ixpeFitsDataFormat::addLvl1aEventsVariableSizeFields(
     ixpeFitsBinaryTableExtension& ext)
 {
-  //ext.insertField("PIX_TRK", "QI", "", TSHORT);
-  //ext.insertField("PIX_PIS", "QI", "", TSHORT);
   ext.insertField("PIX_X", "400E", " ", TFLOAT);
   ext.insertField("PIX_Y", "400E", " ", TFLOAT);
   ext.insertField("PIX_PHA", "400I", " ", TSHORT);
+  ext.insertField("PIX_TRK", "QI", "", TSHORT);
+  ext.insertField("PIX_PHAS_EQ", "QI", "", TSHORT);
 }
 
 /*!

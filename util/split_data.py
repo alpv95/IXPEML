@@ -39,5 +39,5 @@ def tt_random_split(inds, fracs=(0.7, 0.3), rng_seed=None):
     if rng_seed is not None:
         np.random.seed(rng_seed)
 
-    split = train_test_split(inds, test_size=fracs[1])  # returns [t, t]
+    split = train_test_split(inds, test_size=fracs[1], shuffle=False)  # returns [t, t]
     return split[0], split[1]

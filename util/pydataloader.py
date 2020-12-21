@@ -36,6 +36,7 @@ class H5Dataset(Dataset):
         print("Dataset size: ", self.length)
         
         if datatype =='sim':
+            assert "angles" in data_all.keys(), "--datatype should be set to 'meas', not 'sim'"
             self.angles = data_all["angles"]
             self.abs_pts = torch.mean(data_all["abs"], axis=2) / self.pixels
             self.zs = data_all["z"]
@@ -51,6 +52,7 @@ class H5Dataset(Dataset):
             elif (losstype == "mserr"):
                 self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
         else:
+            self.trgs = data_all["trg_id"]
             self.angles = torch.zeros(len(self.tracks_cube), 3, 5).float()
     
     def __getitem__(self, index):

@@ -32,7 +32,10 @@ with this program; if not, write to the Free Software Foundation Inc.,
 #include "Io/include/ixpeInputFile.h"
 #include "Io/include/ixpeFitsFile.h"
 #include "Event/include/ixpeEvent.h"
+#include "MonteCarlo/include/ixpeMcInfo.h"
 #include "Recon/include/ixpeReconConfiguration.h"
+#include "Recon/include/ixpeEvtStatusBitMask.h"
+
 
 
 // Forward declarations:
@@ -47,8 +50,8 @@ class ixpeLvl1aFitsFile : public ixpeFitsFile
 
   //! Constructor.
   ixpeLvl1aFitsFile(const std::string& filePath,
-                                const FileMode mode=FileMode::READ,
-                                bool withOptionalFields = false);
+                    const FileMode mode=FileMode::READ,
+                    bool withOptionalFields = false);
 
   //! Open an existing file
   virtual void open(const std::string& filePath, bool readAndWrite);
@@ -79,7 +82,11 @@ class ixpeLvl1aFitsFile : public ixpeFitsFile
   //void write(std::vector<int>& eventIds, const std::vector<ixpeEvent>& events,
   //           const std::vector<std::vector<ixpeTrack>>& vectorTracks);
   void write(int eventId, const ixpeEvent& event,
-             const std::vector<ixpeTrack>& tracks);
+             const std::vector<ixpeTrack>& tracks,
+             ProcStatusMask_t procStatusMask = 0);
+
+  //! Write Monte Carlo info in the current row of the MONTECARLO extension
+  void writeMcInfo(const ixpeMcInfo& mcInfo);
 
   //! Write a GTI table into the file
   void writeGtiTable(const ixpeGtiTable& gtiTable);
@@ -88,6 +95,9 @@ class ixpeLvl1aFitsFile : public ixpeFitsFile
   short fileVersion() const;
 
  private:
+
+  // Version of the file (we use the same number for LV1 and LV1a);
+  short m_lv1Version;
 
   //! Header of the EVENTS binary table extension
   ixpeFitsHeader m_eventsExtensionHeader;
@@ -101,6 +111,9 @@ class ixpeLvl1aFitsFile : public ixpeFitsFile
   //! Write default values for events with no valid tracks.
   void writeEmptyTrack();
 
+  //! Write default values for tracks with failed moments analysis
+  void writeFailedMomentsAnalysis();
+
   //! Creates the EVENTS binary table extension
   void createEventsBinaryTableExtension();
 
@@ -109,6 +122,7 @@ class ixpeLvl1aFitsFile : public ixpeFitsFile
 
   //! Creates the GTI binary table extension
   void createGtiBinaryTableExtension();
+
 };
 
 

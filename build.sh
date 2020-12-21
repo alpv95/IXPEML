@@ -18,6 +18,6 @@ ml py-matplotlib/2.1.2_py36
 #srun python3 run_build_fitsdata.py /scratch/groups/kipac/alpv95/data/gen2a/ data/expanded/recon$SLURM_ARRAY_TASK_ID
 #srun python3 run_build_fitsdata.py /scratch/groups/kipac/alpv95/data/GPD_EM_data/GPD_EM_6p4keV/ data/expanded/recon -meas
 #srun python3 run_build_fitsdata.py /scratch/groups/rwr/alpv95/data/gen2a_5/ data/expanded/recon_5
-srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_unpol /home/users/alpv95/khome/tracksml/data/expanded/newpaper_unpol --Erange 1.0 9.0 --fraction 0.0371 --pl 0 --aeff
+srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_unpol /home/users/alpv95/khome/tracksml/data/expanded/newpaper_unpol --Erange 1.0 9.0 --fraction 0.0361 --pl 0 --aeff
 #python3 run_build_fitsdata.py /scratch/groups/rwr/alpv95/data/gen4_test data/expanded/final_6p4_unpol --augment 1 --shift 2
 #srun python3 run_build_fitsdata.py /scratch/groups/rwr/alpv95/data/gen4_test/ data/expanded/ -meas
