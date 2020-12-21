@@ -19,7 +19,6 @@ with this program; if not, write to the Free Software Foundation Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 ***********************************************************************/
 
-
 #include "__version__.h"
 #include "Time/include/ixpeTime.h"
 #include "Utils/include/ixpeLogging.h"
@@ -52,6 +51,12 @@ ixpeLvl1aFitsFile::ixpeLvl1aFitsFile(const std::string& filePath,
 void ixpeLvl1aFitsFile::open(const std::string& filePath, bool readAndWrite)
 {
   ixpeFitsFile::open(filePath, readAndWrite);
+  try {
+    m_lv1Version = m_fileHeader.value<short>("LV1_VER");
+  } catch (cfitsio_error& except) {
+    LOG_WARN << "LV1_VER keyword not found. Assuming an old version of the file";
+    m_lv1Version = 0;
+  }
   ixpeFitsFile::addTableExtension(ixpeFitsDataFormat::eventsExtensionName(),
       ixpeFitsDataFormat::ixpeLvl1aEventsExtension(m_withOptionalFields));
   if (checkHdu(ixpeFitsDataFormat::gtiExtensionName())) {
@@ -73,6 +78,8 @@ void ixpeLvl1aFitsFile::create(const std::string& filePath, bool overwrite)
 {
   ixpeFitsFile::create(filePath, overwrite);
   createPrimaryHdu();
+  m_lv1Version = ixpeFitsDataFormat::lv1Version();
+  m_fileHeader.setKeyword("LV1_VER", m_lv1Version);
   createEventsBinaryTableExtension();
 }
 
@@ -94,7 +101,7 @@ FileType ixpeLvl1aFitsFile::fileType()
  */
 short ixpeLvl1aFitsFile::fileVersion() const
 {
-  return m_fileHeader.value<short>("LV1_VER");
+  return m_lv1Version;
 }
 
 /*!
@@ -167,6 +174,8 @@ void ixpeLvl1aFitsFile::writeEventsHeader(const ixpeFitsHeader& lvl1Header)
   evtHeader.setKeyword("REC_VER", std::string(__GPDSW_VERSION__));
   evtHeader.setKeyword("ACOLCORR", rc::coherentNoiseCorrectionOffset);
   evtHeader.setKeyword("ATRGCORR", rc::triggerMiniclusterCorrectionOffset);
+  evtHeader.setKeyword("MINTKHIT", rc::minTrackHits);
+  evtHeader.setKeyword("MINDNSPT", rc::minDensityPoints);
   if (rc::writeTracks) {
     evtHeader.setKeyword("TRK_FULL", TRUE);
   }
@@ -238,7 +247,8 @@ void ixpeLvl1aFitsFile::createMcBinaryTableExtension()
   Now need to write whole fits file at once, but then modulaton_factor.py wont be able to read properly??
  */
 void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
-                              const std::vector<ixpeTrack>& tracks)
+                              const std::vector<ixpeTrack>& tracks,
+                              ProcStatusMask_t procStatusMask)
 {
   const std::string& extName = ixpeFitsDataFormat::eventsExtensionName();
   // Move to the EVENTS HDU
@@ -257,6 +267,8 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
   writeCell("PAKTNUMB", event.packetId());
   writeCell("TRG_ID", event.triggerId());
   writeCell("TIME", event.timestamp());
+  writeCell("SEC", event.seconds());
+  writeCell("MICROSEC", event.microseconds());
   writeCell("LIVETIME", event.livetime());
   writeCell("ROI_SIZE", event.size());
   writeCell("MIN_CHIPX", event.minColumn());
@@ -266,17 +278,12 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
   writeCell("ERR_SUM", event.errorSummary());
   writeCell("DU_STATUS", event.duStatus());
   writeCell("DSU_STATUS", event.dsuStatus());
-  writeCell("STATUS", event.status());
+  writeBitsCell<evtProcMaskSize>("STATUS", procStatusMask);
   writeCell("NUM_PIX", event.numAboveThresholdPixels());
-  //if (m_withOptionalFields) {
-  //  writeCell("PIX_PIS",
-  //           const_cast<std::vector<event_adc_counts_t>&>(event.adcCounts())); //[track.hits() for track in tracks]
-  //  writeCell("PIX_TRK",
-  //           const_cast<std::vector<cluster_id_t>&>(event.clusterIds()));
-  //}
+  
   int numTracks = static_cast<int>(tracks.size());
   writeCell("NUM_CLU", numTracks);
-  if (numTracks ==  0){
+  if (numTracks ==  0) {
     writeEmptyTrack();
   }
   else{
@@ -310,9 +317,19 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
        writeCell("PIX_PHA", const_cast<std::vector<event_adc_counts_t>&>(pix_adc));
     }
   }
-  //bar.advance();
-  //}
-  //bar.setDone();
+  if (m_withOptionalFields) {
+    // We write the pulse invariant multiplied by 8 and rounded to an integer
+    // To do so, we need to create and fill a temporary array here
+    auto pha_eqs = std::vector<event_adc_counts_t>();
+    pha_eqs.reserve(event.pulseInvariants().size()); // reserving is faster
+    for (const auto& pi: event.pulseInvariants()) {
+      pha_eqs.push_back(static_cast<event_adc_counts_t>(std::round(pi * 8)));
+    }
+    writeCell("PIX_PHAS_EQ", pha_eqs);
+    // The const_cast is required by the signature of writeCell
+    writeCell("PIX_TRK",
+              const_cast<std::vector<cluster_id_t>&>(event.clusterIds()));
+  }
 }
 
 /*!
@@ -382,18 +399,33 @@ void ixpeLvl1aFitsFile::writeMainTrack(const ixpeTrack& mainTrack)
   // force a downcast of the related quantities (which are represented
   // with a double precision in the code)
   writeCell<float>("SN", mainTrack.signalToNoiseRatio());
-  writeCell<float>("PI", mainTrack.pulseInvariant());
-  writeCell<float>("PHI1", mainTrack.firstPassMomentsAnalysis().phi());
-  writeCell<float>("PHI2", mainTrack.secondPassMomentsAnalysis().phi());
-  writeCell<float>("DETPHI", mainTrack.secondPassMomentsAnalysis().phi());
-  writeCell<float>("DETX", mainTrack.absorptionPoint().x());
-  writeCell<float>("DETY", mainTrack.absorptionPoint().y());
+  writeCell<float>("PHA_EQ", mainTrack.pulseInvariant());
   writeCell<float>("BARX", mainTrack.barycenter().x());
   writeCell<float>("BARY", mainTrack.barycenter().y());
-  writeCell<float>("TRK_M2T", mainTrack.firstPassMomentsAnalysis().mom2trans());
-  writeCell<float>("TRK_M2L", mainTrack.firstPassMomentsAnalysis().mom2long());
-  writeCell<float>("TRK_M3L", mainTrack.firstPassMomentsAnalysis().mom3long());
-  writeCell<float>("TRK_SKEW", mainTrack.firstPassMomentsAnalysis().skewness());
+  if (!mainTrack.firstPassSuccessful()){
+    writeFailedMomentsAnalysis();
+    // We can still use the barycenter as estimate imapct point
+    writeCell<float>("DETX", mainTrack.barycenter().x());
+    writeCell<float>("DETY", mainTrack.barycenter().y());
+  } else {
+    writeCell<float>("PHI1", mainTrack.firstPassMomentsAnalysis().phi());
+    writeCell<float>("TRK_M2T", mainTrack.firstPassMomentsAnalysis().mom2trans());
+    writeCell<float>("TRK_M2L", mainTrack.firstPassMomentsAnalysis().mom2long());
+    writeCell<float>("TRK_M3L", mainTrack.firstPassMomentsAnalysis().mom3long());
+    writeCell<float>("TRK_SKEW", mainTrack.firstPassMomentsAnalysis().skewness());
+    if (mainTrack.secondPassSuccessful()){
+      writeCell<float>("PHI2", mainTrack.secondPassMomentsAnalysis().phi());
+      writeCell<float>("DETPHI", mainTrack.secondPassMomentsAnalysis().phi());
+      writeCell<float>("DETX", mainTrack.absorptionPoint().x());
+      writeCell<float>("DETY", mainTrack.absorptionPoint().y());
+    } else {
+      // If the second pass fails, use the first pass as best estimate
+      writeCell<float>("PHI2", FLOATNULLVALUE);
+      writeCell<float>("DETPHI", mainTrack.firstPassMomentsAnalysis().phi());
+      writeCell<float>("DETX", mainTrack.barycenter().x());
+      writeCell<float>("DETY", mainTrack.barycenter().y());
+    }
+  }
 }
 
 /*!
@@ -409,18 +441,53 @@ void ixpeLvl1aFitsFile::writeEmptyTrack()
   // explicitly invoke the float version of the writing routine, in order to
   // force a downcast of the related quantities (which are represented
   // with a double precision in the code)
-  writeCell<float>("PI", 0.);
+  writeCell<float>("PHA_EQ", 0.);
   writeCell<float>("EVT_FRA", 0.);
   writeCell<float>("SN", 0.);
-  writeCell<float>("PHI1", FLOATNULLVALUE);
-  writeCell<float>("PHI2", FLOATNULLVALUE);
-  writeCell<float>("DETPHI", FLOATNULLVALUE);
   writeCell<float>("DETX", FLOATNULLVALUE);
   writeCell<float>("DETY", FLOATNULLVALUE);
   writeCell<float>("BARX", FLOATNULLVALUE);
   writeCell<float>("BARY", FLOATNULLVALUE);
+  writeFailedMomentsAnalysis();
+}
+
+/*!
+  Write default values for events with failed moments analysis.
+ */
+void ixpeLvl1aFitsFile::writeFailedMomentsAnalysis()
+{
+  writeCell<float>("PHI1", FLOATNULLVALUE);
+  writeCell<float>("DETPHI", FLOATNULLVALUE);
   writeCell<float>("TRK_M2T", FLOATNULLVALUE);
   writeCell<float>("TRK_M2L", FLOATNULLVALUE);
   writeCell<float>("TRK_M3L", FLOATNULLVALUE);
   writeCell<float>("TRK_SKEW", FLOATNULLVALUE);
+  // If the first pass fails the second automatically will
+  writeCell<float>("PHI2", FLOATNULLVALUE);
+  writeCell<float>("DETPHI", FLOATNULLVALUE);
+}
+
+/*!
+  Write Monte Carlo info in the current row of the MONTECARLO extension
+*/
+void ixpeLvl1aFitsFile::writeMcInfo(const ixpeMcInfo& mcInfo)
+{
+  const std::string& extName = ixpeFitsDataFormat::mcExtensionName();
+  // Move to the MONTE_CARLO HDU
+  selectHdu(extName);
+  // Increment the current row pointer to write on the next row
+  tableExtension(extName).incrementCurrentRow();
+  writeCell<double>("ENERGY", mcInfo.photonEnergy);
+  writeCell<double>("ABS_X", mcInfo.absorbtionPointX);
+  writeCell<double>("ABS_Y", mcInfo.absorbtionPointY);
+  writeCell<double>("ABS_Z", mcInfo.absorbtionPointZ);
+  writeCell<double>("PE_ENE", mcInfo.photoElectronEnergy);
+  writeCell<double>("PE_PHI", mcInfo.photoElectronPhi);
+  writeCell<double>("PE_THET", mcInfo.photoElectronTheta);
+  writeCell<double>("AUG_ENE", mcInfo.augerEnergy);
+  writeCell<double>("AUG_PHI", mcInfo.augerPhi);
+  writeCell<double>("AUG_THET", mcInfo.augerTheta);
+  writeCell<double>("TRK_LEN", mcInfo.trackLength);
+  writeCell<double>("RANGE", mcInfo.range);
+  writeCell<int>("NUM_PAIR", mcInfo.numPair);
 }

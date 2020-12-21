@@ -78,6 +78,8 @@ class builder(object):
         with fits.open(input_file, memmap=False) as hdu:
             data = hdu[1].data
 
+        assert 'NUM_CLU' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
+
         #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
         cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
         if pulse_cut:
@@ -87,8 +89,12 @@ class builder(object):
 
     def save(self, split, split_func):
         N_final = len(self.build_result["tracks"])
-        indxs = split_func(np.arange(N_final), fracs=split)
-
+        if split[0] == 1:
+            indxs = [np.arange(N_final)]
+            self.out_files = [self.out_files[0]]
+        else:
+            indxs = split_func(np.arange(N_final), fracs=split)
+        
         for indx, save_file in zip(indxs, self.out_files):
             tracks_cum_save = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in indx]
             with open(save_file + "tracks_full.pickle", "wb") as f:
@@ -194,6 +200,8 @@ class measured(builder):
         self.out_files = [os.path.join(self.out_base,'meas_{}_{}/train/'.format(energy_str,  self.datasets[0].pol)),  
                         os.path.join(self.out_base,'meas_{}_{}/test/'.format(energy_str,  self.datasets[0].pol))]
 
+        self.build_result.update([("trg_id", torch.zeros( self.total, dtype=torch.int32 ))]) 
+
     def build(self, meas_file, pulse_cut):
         input_file = os.path.join(self.in_base, meas_file)
         data, cut = super().init_build(input_file, pulse_cut)
@@ -203,10 +211,11 @@ class measured(builder):
         mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
         bars = np.column_stack((data['BARX'],data['BARY']))[cut]
         hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-                                         moms, mom_energies, data['DETPHI'][cut], mom_abs_pts, bars) 
+                                         moms, mom_energies, data['DETPHI'][cut], mom_abs_pts, bars)
+        trgs = data['TRG_ID'][cut][np.arange(self.total)] 
         print(hex_tracks.n_tracks,"loaded ok")
         hex_tracks = hex_tracks[np.arange(self.total)]
-                    
+
         tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
 
         self.build_result["tracks"].extend(tracks)
@@ -214,12 +223,13 @@ class measured(builder):
         self.build_result["moms"][:self.total] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
         self.build_result["mom_energy"][:self.total] = torch.from_numpy(hex_tracks.mom_energy)
         self.build_result["mom_abs"][:self.total] = mom_abs_pts 
+        self.build_result["trg_id"][:self.total] = torch.from_numpy(trgs.astype(np.int32))
         self.build_result["xy_abs"][:self.total] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
 
 
 
 def main():
-    meas_split = (0.9, 0.1)
+    meas_split = (1, 0)
     sim_split = (0.9, 0.05, 0.05)
 
     if args.meas:
