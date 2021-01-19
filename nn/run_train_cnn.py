@@ -24,9 +24,9 @@ def main():
 
     use_cluster = True
     data_dir = os.path.realpath('data/')
-    data_file = data_dir + "/expanded/train733_flat1/"
+    data_file = data_dir + "/expanded/train_heads/"
 
-    job = Spec(name='733flat1_mserrall2_expectileHuber_alpha0p8', data_file=data_file, loss='mserrall2', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='733flat_mserrall2_headonly_alpha0', data_file=data_file, loss='mserrall2', alpha_loss=0.0, Z=None, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
 
     #  Get full/through-symlink paths, which are needed by the jobs that run on the cluster
@@ -299,7 +299,7 @@ def main():
         'proc': job.n_threads,
         'mem': 22,  # GB
         # 'time': 72,  # hr, a target time for all multistarts in a job
-        'time': 25.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
+        'time': 29.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
         'working_dir': working_dir,
         'name': 'train_{}'.format(job.name),
         'gpus': 4,
