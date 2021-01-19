@@ -48,6 +48,8 @@ parser.add_argument('--meas_e', type=float,
                     help='Energy of measured tracks in kev')
 parser.add_argument('-pulse','--pulse_cut', action='store_true',
                     help='Whether to cut data about the maximum in the pulse height spectrum as in calibration documents')
+parser.add_argument('--head_only', action='store_true',
+                    help='No low or high Z tail tracks')
 args = parser.parse_args()
 
 
@@ -64,6 +66,7 @@ class builder(object):
     shift = args.shift
     pl = args.pl
     fraction = args.fraction
+    head_only = args.head_only
 
     def __init__(self, datasets, total):
         self.total = total
@@ -144,6 +147,9 @@ class simulated(builder):
                 sim_data = hdu[3].data
 
             cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
+            #Only take tracks in the peaks
+            if self.head_only:
+                cut *= (sim_data['ABS_Z'] >= 0.95) * (sim_data['ABS_Z'] <= 10.7)
 
             moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
             Zs = sim_data['ABS_Z'][cut].astype(np.float32)
