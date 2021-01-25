@@ -146,6 +146,7 @@ class simulated(builder):
             with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
                 sim_data = hdu[3].data
 
+            assert data['PHA'].shape == sim_data['PE_PHI'].shape, ".fits file (for simulated parameters) and _recon.fits file (for recovered parameters) do not correspond"
             cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
             #Only take tracks in the peaks
             if self.head_only:
@@ -162,6 +163,7 @@ class simulated(builder):
                                             mom_abs_pts, bars, Zs)
 
             print(hex_tracks.n_tracks,"loaded ok")
+            assert hex_tracks.n_tracks >= n_train_final, "Too few tracks, N_final too large."
             hex_tracks = hex_tracks[np.arange(n_train_final)]
 
             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
