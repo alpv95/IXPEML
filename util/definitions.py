@@ -139,4 +139,8 @@ ensembles = { "pol_only": ['final_MSERRALL_PL2_aug1_lowreg_alpha1/models/mom_102
  '733bessel1/models/RLRP_4096_131.ptmodel',
  '733bessel3/models/mom_4096_151.ptmodel',],
 
+          "heads_only":["733flat_mserrall2_headonly/models/RLRP_1024_191.ptmodel",],
+
+          "heads_only_alpha0":["733flat_mserrall2_headonly_alpha0/models/mom_1024_191.ptmodel"],
+
  }
