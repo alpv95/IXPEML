@@ -11,13 +11,96 @@ from scipy.optimize import minimize
 from scipydirect import minimize as minimize_direct
 from scipy.stats import norm
 from util.net_test import *
+from scipy.special import i0,i1
+
 
 PIXEL_X_SPACE = 0.05 #in micrometers
 PIXEL_Y_SPACE = 0.0433
 
+######### General convenience functions ##########
+
+def pi_pi(x):
+    '''Bring angle (radians) to range [-pi,pi]'''
+    return np.mod(x + np.pi,2*np.pi) - np.pi
+
+def pi2_pi2(x):
+    '''Bring angle (radians) to range [-pi/2, pi/2] '''
+    return np.mod(x + np.pi/2,np.pi) - np.pi/2
+
+def geo_mean(iterable, axis):
+    '''Geometric mean'''
+    a = np.log(iterable)
+    return np.exp(a.mean(axis=axis))
+
+def circular_mean(angles, axis):
+    '''Arg of first moment of Von Mises distribution'''
+    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
+    return 0.5*np.arctan2(mean[1],mean[0])
+
+def circular_std(angles, axis):
+    ''' Circular variance can either be defined as var = 1-R [0,1], or var = -2ln(R) [0,inf]. 
+        This function just returns R.
+        For von Mises, concentration parameter k -> I1(k)/I0(k) = R.'''
+    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
+    R = np.linalg.norm(mean,axis=0)
+    return R
+
+def mad(sample,side=0):
+    '''Median absolute deviation'''
+    med = np.median(sample)
+    res = sample - med 
+    if side > 0:
+        out = np.median(res[res >= 0])
+    elif side < 0:
+        out = abs(np.median(res[res <= 0]))
+    else:
+        out = np.median(abs(res))
+    return out
+
+def fwhm(sample):
+    '''full width half max'''
+    n, bins, _ = plt.hist(sample,bins=160,density=True)
+    plt.clf()
+    mx = np.max(n)
+    return np.sum((n >= mx/2) * abs(bins[1] - bins[2]))
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+def BC(hist,mle):
+    '''
+    Bias-Correction for confidence intervals -- not really applicable to our case
+    '''
+    mu_hat = mle
+    p0 = np.sum(hist < mu_hat) / len(hist)
+    z0 = norm.ppf(p0)
+    g_cdf = [np.sum(hist < hist[i]) / len(hist) if np.sum(hist < hist[i]) > 0 
+             else np.sum(hist <= hist[i]) / len(hist) for i in range(len(hist))] 
+    z_theta = np.array(norm.ppf(g_cdf)) - z0
+    weights = norm.pdf(z_theta - z0) / norm.pdf(z_theta + z0)
+    weights = weights / np.sum(weights)
+    
+    return weights
+
+
+
+############ Polarimetry Specific Convenience Functions ################
+
+
+
 def MDP99(N,mu100):
     ''' MDP99 for either Neff or N'''
     return 4.29 / (mu100*np.sqrt(N)) *100
+
+def stokes(angles):
+    N = len(angles)
+    Q = sum(np.cos(2*angles)) / N
+    U = sum(np.sin(2*angles)) / N
+ 
+    return 2*np.sqrt(Q**2 + U**2), np.arctan2(U,Q)/2
 
 def weighted_stokes(angles, weights, lambd):
     '''If weights equal (or lambd == 0) this reduces to normal Stokes, and Neff == N'''
@@ -33,6 +116,11 @@ def weighted_stokes(angles, weights, lambd):
     
     return mu, phi0, Neff
 
+def mu_error_stokes(Q,U,mu,phi,N):
+    '''Gaussian error on mu measurement'''
+    return np.sqrt( 1/(N*(Q**2 + U**2)) * ( (0.5 - mu**2/4 * np.cos(2*phi)**2)*4*Q**2 + 
+        (0.5 - mu**2/4 * np.sin(2*phi)**2)*4*U**2 - (mu**2/8 * np.sin(4*phi))*8*Q*U ) )
+
 def ellipticity_cut(angles, moms, keep_fraction):
         '''
         Applies ellipticity based cuts to predicted photoelectron angles.
@@ -43,16 +131,16 @@ def ellipticity_cut(angles, moms, keep_fraction):
                 break
         return mom_cut
 
-def pi_pi(x):
-    '''Bring angle (radians) to range [-pi,pi]'''
-    return np.mod(x + np.pi,2*np.pi) - np.pi
-
-def pi2_pi2(x):
-    '''Bring angle (radians) to range [-pi/2, pi/2] '''
-    return np.mod(x + np.pi/2,np.pi) - np.pi/2
+def minimiseMDP(angles, weights):
+    def mdp(lambd):
+        mu, _, Neff = weighted_stokes(np.ndarray.flatten(angles), weights, lambd)
+        return MDP99(Neff,mu)
+    result = minimize_scalar(mdp, bounds=(0,8), method="bounded")
+    return result['fun'], result['x']
 
 def Aeff(E):
-    '''Effective area as a function of energy at 687mbar
+    '''
+    Effective area as a function of energy at 687mbar
         Arguments: E (kev)
     '''
     try:
@@ -99,43 +187,22 @@ def Aeff_train(E):
     idx = np.argmin(abs(eff1[:,0] - E))
     return afactor[idx]
 
-def triple_angle_reshape(inp, N, augment=3):
-    try:
-        inp2 = np.reshape(inp,[-1,N],"F")
-        inp3 = np.reshape(inp2,[-1,augment,N],"C")
-    except:
-        return inp
-    return inp3
 
-def triple_angle_rotate(ang):
-    ang[:,1,:] -= 2*np.pi/3
-    ang[:,2,:] += 2*np.pi/3
-    return pi_pi(ang)
+def weightVM(sigma):
+    w = i1(1/sigma**2) / i0(1/sigma**2)
+    if isinstance(w,np.ndarray):
+        return np.where(np.isnan(w),1,w)
+    else:
+        if np.isnan(w):
+            return 1
+        else:
+            return w
 
-def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom):
-    return (abs_pts_sq - mom_abs_pts_sq) * np.array([0.05,0.0433]) + xy_abs_mom
+def weightGauss(sigma):
+    return np.exp(-2*sigma**2)
 
-def circular_mean(angles, axis):
-    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
-    mu = mean / np.linalg.norm(mean,axis=0)
-    return 0.5*np.arctan2(mu[1],mu[0])
-
-def circular_mean_weight(angles, weights, axis):
-    mean = np.array([np.mean(weights*np.cos(2*angles),axis=axis), np.mean(weights*np.sin(2*angles),axis=axis)])
-    mu = mean / np.linalg.norm(mean,axis=0)
-    return 0.5*np.arctan2(mu[1],mu[0])
-
-def circular_std(angles, axis):
-    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
-    R = np.linalg.norm(mean,axis=0)
-    return 0.5*np.sqrt((1 - R**2) / (R * (2 - R**2)))
-
-def stokes(angles):
-    N = len(angles)
-    Q = sum(np.cos(2*angles)) / N
-    U = sum(np.sin(2*angles)) / N
- 
-    return 2*np.sqrt(Q**2 + U**2), np.arctan2(U,Q)/2
+def weightPL(sigma):
+    return 1/sigma
 
 def generate_spectrum(Angles, N_E, fraction=1):
     """
@@ -208,24 +275,10 @@ def bootstrap(angles, B, error_weight=2, n_cpu=None):
 
     return MUs, PHIs
 
-def BC(hist,mle):
-    '''
-    Bias-Correction for confidence intervals -- not really applicable to our case
-    '''
-    mu_hat = mle
-    p0 = np.sum(hist < mu_hat) / len(hist)
-    z0 = norm.ppf(p0)
-    g_cdf = [np.sum(hist < hist[i]) / len(hist) if np.sum(hist < hist[i]) > 0 
-             else np.sum(hist <= hist[i]) / len(hist) for i in range(len(hist))] 
-    z_theta = np.array(norm.ppf(g_cdf)) - z0
-    weights = norm.pdf(z_theta - z0) / norm.pdf(z_theta + z0)
-    weights = weights / np.sum(weights)
-    
-    return weights
 
 def Neff_fit(mus, phis, mle, Nbound=2e6, plot=False, pol=False):
     '''
-    mle -> (N, mu, phi)
+    mle -> (N, mu, phi) from bootstrap distribution of mus and phis
     '''
     loglike_ipopt = lambda x: -( len(mus)*(np.log(x[0]) - x[0]*x[1]**2 / 4)
                                          + np.sum( #np.log(mus) 
@@ -251,13 +304,12 @@ def Neff_fit(mus, phis, mle, Nbound=2e6, plot=False, pol=False):
     else:
         return Neff
 
-def pairwise(iterable):
-    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
-    a, b = tee(iterable)
-    next(b, None)
-    return zip(a, b)
+
+############### Track Pre-Processing ##################
+
 
 def sparse_mean(track_list, n_pixels):
+    '''Mean and std of a set of sparse tracks, for training standardization.'''
     dense_pad1 = np.zeros((n_pixels,n_pixels)) #one for each shift
     dense_pad2 = np.zeros((n_pixels,n_pixels))
 
@@ -280,23 +332,45 @@ def sparse_mean(track_list, n_pixels):
     return torch.from_numpy(mean), torch.from_numpy(std)
 
 def sparse2dense(sparse_tracks, n_pixels=50):
-    ''' Takes python list of sparse square tracks'''
+    ''' Takes python list of sparse square tracks, converts them to dense arrays'''
     dense_tracks = []
     for track in sparse_tracks:
         dense_tracks.append(torch.sparse.FloatTensor(track[0,0,:2,:].long(), track[0,0,2,:], torch.Size([n_pixels,n_pixels])).to_dense())
 
     return torch.stack(dense_tracks)
 
-# def error_combine(ang, error):
-#     errors_epis = circular_std(ang, axis=(1,2))
-#     error = np.sqrt(error.T**2/4 + errors_epis**2).T
-#     return np.sqrt(np.mean(error**2,axis=(1,2)))
 
-def error_combine(ang, error):
-    errors_epis = circular_std(ang, axis=(1,2))
-    return np.sqrt(np.mean(error**2,axis=(1,2))), errors_epis
+
+##################### Tracks Postprocessing ######################
+
+
+
+def triple_angle_reshape(inp, N, augment=3):
+    '''Reshapes 1d ensemble list of results'''
+    try:
+        inp2 = np.reshape(inp,[-1,N],"F")
+        inp3 = np.reshape(inp2,[-1,augment,N],"C")
+    except:
+        return inp
+    return inp3
+
+def triple_angle_rotate(ang):
+    ''' Rotates augmented tracks back to their original orientation'''
+    ang[:,1,:] -= 2*np.pi/3
+    ang[:,2,:] += 2*np.pi/3
+    return pi_pi(ang)
+
+def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom):
+    '''Converts abs points from local image coordinates to global grid coords'''
+    return (abs_pts_sq - mom_abs_pts_sq) * np.array([0.05,0.0433]) + xy_abs_mom
+
+def error_combine(ang, sigma):
+    '''Returns combined statistical and systematic uncertainty weights'''
+    weight_epistemic = circular_std(ang, axis=(1,2))
+    return geo_mean(weightVM(sigma),axis=(1,2)), weight_epistemic
 
 def pi_ambiguity_mean(ang):
+    '''Mean track angle from ensemble [-pi,pi]'''
     pi_fix = (np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2)) >= 0.5) * np.pi
     return pi_pi(circular_mean(ang, axis=(1,2)) + pi_fix)
 
@@ -345,6 +419,7 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     return A
 
 def fits_save(results, file, datatype):
+    '''Organizes final fits file save'''
     angles, angles_mom, angles_sim, moms, errors, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, \
     energies, energies_sim, energies_mom, zs, trgs, xy_abs_pts = results
 
@@ -353,8 +428,8 @@ def fits_save(results, file, datatype):
     c1 = fits.Column(name='NN_PHI', array=angles, format='E')
     c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='E',)
     c4 = fits.Column(name='MOM_ELLIP', array=moms, format='E',)
-    c5 = fits.Column(name='NN_SIGMA', array=errors, format='E')
-    c16 = fits.Column(name='NN_SIGMA_EPIS', array=error_epis, format='E')
+    c5 = fits.Column(name='NN_WEIGHT', array=errors, format='E')
+    c16 = fits.Column(name='NN_WEIGHT_EPIS', array=error_epis, format='E')
     c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
     c7 = fits.Column(name='MOM_ABS', array=mom_abs_pts, format='2E', dim='(2)')
     c8 = fits.Column(name='XY_MOM_ABS', array=xy_abs_pts, format='2E', dim='(2)')

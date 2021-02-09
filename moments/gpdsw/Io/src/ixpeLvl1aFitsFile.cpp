@@ -317,19 +317,19 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
        writeCell("PIX_PHA", const_cast<std::vector<event_adc_counts_t>&>(pix_adc));
     }
   }
-  if (m_withOptionalFields) {
-    // We write the pulse invariant multiplied by 8 and rounded to an integer
-    // To do so, we need to create and fill a temporary array here
-    auto pha_eqs = std::vector<event_adc_counts_t>();
-    pha_eqs.reserve(event.pulseInvariants().size()); // reserving is faster
-    for (const auto& pi: event.pulseInvariants()) {
-      pha_eqs.push_back(static_cast<event_adc_counts_t>(std::round(pi * 8)));
-    }
-    writeCell("PIX_PHAS_EQ", pha_eqs);
-    // The const_cast is required by the signature of writeCell
-    writeCell("PIX_TRK",
-              const_cast<std::vector<cluster_id_t>&>(event.clusterIds()));
-  }
+  // if (m_withOptionalFields) {
+  //   // We write the pulse invariant multiplied by 8 and rounded to an integer
+  //   // To do so, we need to create and fill a temporary array here
+  //   auto pha_eqs = std::vector<event_adc_counts_t>();
+  //   pha_eqs.reserve(event.pulseInvariants().size()); // reserving is faster
+  //   for (const auto& pi: event.pulseInvariants()) {
+  //     pha_eqs.push_back(static_cast<event_adc_counts_t>(std::round(pi * 8)));
+  //   }
+  //   writeCell("PIX_PHAS_EQ", pha_eqs);
+  //   // The const_cast is required by the signature of writeCell
+  //   writeCell("PIX_TRK",
+  //             const_cast<std::vector<cluster_id_t>&>(event.clusterIds()));
+  // }
 }
 
 /*!

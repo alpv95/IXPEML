@@ -41,9 +41,9 @@ def main():
         os.makedirs(job_dir)
 
     # Copy data to job dir
-    #data_file = shutil.copy2(input_file, job_dir)
-    #meas_file = shutil.copy2(meas_file, job_dir)
-    #meas1_file = shutil.copy2(meas1_file, job_dir)
+    shutil.copy2(data_file + "train/ZN.pt", job_dir)
+    shutil.copy2(data_file + "train/ZNE.pt", job_dir)
+
     # Hyperparams
     layer_sizes = [128, 64]  # for the 1st 2 fully connected layers; the last has 1 or 2 depending on loss fun
     layer_combos = list(itertools.product(layer_sizes, repeat=2))

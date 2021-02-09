@@ -42,7 +42,7 @@ parser.add_argument('--aeff', action='store_true',
                     help='Whether to include telescope effective area for simulated tracks.')   
 parser.add_argument('--meas', type=str,
                     help='Filename of measured data: Whether data is real or simulated, if squaring measured data this argument is required')
-parser.add_argument('--meas_tot', type=int,
+parser.add_argument('--meas_tot', type=int, default=None,
                     help='The total number of measured tracks to convert to square')
 parser.add_argument('--meas_e', type=float,
                     help='Energy of measured tracks in kev')
@@ -80,15 +80,17 @@ class builder(object):
     def init_build(self, input_file, pulse_cut):
         with fits.open(input_file, memmap=False) as hdu:
             data = hdu[1].data
+            sim_data = hdu[3].data
 
         assert 'NUM_CLU' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
 
         #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
-        cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
+        # cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
+        cut = np.ones_like(data['NUM_CLU'])
         if pulse_cut:
             (mu,sigma) = norm.fit(data['PI'])
             cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
-        return data, cut
+        return data, sim_data, cut
 
     def save(self, split, split_func):
         N_final = len(self.build_result["tracks"])
@@ -142,9 +144,9 @@ class simulated(builder):
             input_file = os.path.join(self.in_base, '{}_{}_recon.fits'.format(dataset.name, energy_str))
             n_train_final = int(dataset.energy**(-self.pl) * 3070000 * self.fraction * aeff(dataset.energy))
 
-            data, cut = super().init_build(input_file, pulse_cut)
-            with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
-                sim_data = hdu[3].data
+            data, sim_data, cut = super().init_build(input_file, pulse_cut)
+            # with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
+            #     sim_data = hdu[3].data
 
             assert data['PHA'].shape == sim_data['PE_PHI'].shape, ".fits file (for simulated parameters) and _recon.fits file (for recovered parameters) do not correspond"
             cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
@@ -212,7 +214,7 @@ class measured(builder):
 
     def build(self, meas_file, pulse_cut):
         input_file = os.path.join(self.in_base, meas_file)
-        data, cut = super().init_build(input_file, pulse_cut)
+        data, _, cut = super().init_build(input_file, pulse_cut)
 
         moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
         mom_energies = super().predict_energy(data['PHA'][cut])
@@ -241,6 +243,9 @@ def main():
     sim_split = (0.9, 0.05, 0.05)
 
     if args.meas:
+        if not args.meas_tot:
+            with fits.open(os.path.join(args.input_base, args.meas), memmap=False) as hdu:
+                args.meas_tot = hdu[1].header['NAXIS2']
         datasets = [Dataset('gen4', args.meas_e, None, 'pol', 'meas')]
         Builder = measured(datasets, args.meas_tot)
         Builder.build(args.meas, args.pulse_cut)
