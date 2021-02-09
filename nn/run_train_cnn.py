@@ -351,8 +351,8 @@ def run_net(ind, data_file, job_dir, opts):
     validate = H5Dataset(data_file + "val/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE))
     #test = H5Dataset(data_file + "test/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std)]), load_all=True)
     test = H5Dataset(data_file + "test/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE))
-    #measured = H5Dataset("/scratch/groups/rwr/alpv95/data/expanded/simgen4_2p0_unpol_shift/train/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std), ToTensor()]), load_all=True)   
-    #measured_test = H5Dataset(meas1_file,'train', 'meas', losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=train.mean,std=train.std,set_max=train.max), ToTensor()]))
+    #measured = H5DatasetEval("/scratch/groups/rwr/alpv95/data/expanded/simgen4_2p0_unpol_shift/train/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std), ToTensor()]), load_all=True)   
+    #measured_test = H5DatasetEval(meas1_file,'train', 'meas', losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=train.mean,std=train.std,set_max=train.max), ToTensor()]))
 
     kwargs = {'num_workers': 4, 'pin_memory': True}
 

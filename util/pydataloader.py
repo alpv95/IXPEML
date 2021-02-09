@@ -53,7 +53,7 @@ class H5Dataset(Dataset):
                 self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
         else:
             self.trgs = data_all["trg_id"]
-            self.angles = torch.zeros(len(self.tracks_cube), 3, 5).float()
+            self.angles = None #torch.zeros(len(self.tracks_cube), 3, 5).float()
     
     def __getitem__(self, index):
         sparse = self.tracks_cube[index]
@@ -74,6 +74,24 @@ class H5Dataset(Dataset):
         
     def __len__(self):
         return self.length
+
+class H5DatasetEval(H5Dataset):
+    def __getitem__(self, index):
+        sparse = self.tracks_cube[index]
+        if sparse.shape[0] == 1:
+            track = torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
+        else:
+            track = torch.stack([
+                torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[1,0,:2,:].long(), sparse[1,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[1,1,:2,:].long(), sparse[1,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[2,0,:2,:].long(), sparse[2,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[2,1,:2,:].long(), sparse[2,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
+            ])
+        sample = track.float()
+        return sample
 
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""

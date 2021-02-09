@@ -447,7 +447,7 @@ class TrackAngleRegressor:
 
     def predict(self, data_loader, use_gpu=True, bayes=False, one_batch=False, output_vals=()):
         """Run inference on provided data, outputting just the predicted angles"""
-        _, metrics = self._eval(data_loader, y_exists=False, use_gpu=use_gpu, bayes=bayes, one_batch=False, output_all=True, output_vals=output_vals)
+        metrics = self._eval(data_loader, y_exists=False, use_gpu=use_gpu, bayes=bayes, one_batch=False, output_all=True, output_vals=output_vals)
         return metrics['y_hat_angles']
     
     def save_checkpoint(self, epoch):
@@ -489,13 +489,6 @@ class TrackAngleRegressor:
             output_type = self.net.module.outputtype  # different behavior depending on net output type
         else:
             output_type = self.net.outputtype
-        # Ensure X has proper dims
-        #if len(X.shape) == 3:
-            #X = np.expand_dims(X, axis=1)  # Add dummy channel
-
-        # Ensure y has proper dims
-        #if y is not None and len(y.shape) == 1 and output_type == '2pos':
-            #y = np.concatenate((np.cos(y).reshape(-1,1), np.sin(y).reshape(-1,1)), axis=1)
 
         self.net.eval()
 
@@ -507,215 +500,77 @@ class TrackAngleRegressor:
            device = torch.device("cpu")
            print("Evaluating on CPU \n")
 
-       # if use_gpu:
-       #     self.net.cuda()
-
-        #n_samples = X.shape[0]
         n_samples = len(data_loader.dataset)
 
         if output_type == '1ang' or output_type == '2pos' or output_type == 'CE' or output_type == 'abs_pts' or output_type == '7pos2err' or output_type == '5pos1err' or output_type == '2pos1err':
-            #y_hats = np.zeros((n_samples,), dtype=np.float32)
             y_hats = np.array([],dtype=np.float32)
-            y = np.array([],dtype=np.float32)
-            d = np.array([],dtype=np.float32)
-        #elif output_type == '2pos':
-            #y_hats = np.zeros((n_samples, 2), dtype=np.float32)
-            #raise("not yet included for pydataloader")
+            
         if output_all and len(output_vals) > 0:
             x_alls = {}
             for val in output_vals:
                 x_alls[val] = []
 
-        # Make predictions using the net on batches
-        #batch_size = 256
-        #i_start = 0
-        #i_end = min(batch_size, n_samples)
-        n_bayes = 1
-        if bayes:
-            self.net.apply(self._drop_eval)
-            n_bayes = 21
-        
         with torch.no_grad():
-             for j in range(n_bayes):
-                 if j == 20:
-                    self.net.eval()
-                 for batch_idx, (X_batch, y_batch) in enumerate(data_loader):
-                     X_batch = X_batch.view([-1, self.input_channels, self.pixels, self.pixels])
-                     #y_batch = y_batch.view([-1,5])
+            for batch_idx, X_batch in enumerate(data_loader):
+                X_batch = X_batch.view([-1, self.input_channels, self.pixels, self.pixels])
 
-                     X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-                     y_hat_batch = self.net(X_batch).cpu().data.numpy()
-                     y_hats = np.append(y_hats, y_hat_batch)
-                     y = np.append(y,y_batch.cpu().data.numpy())
-                     #if y_exists:
-                        #d = np.append(d,loss.angular_distance(y_hat_batch, y_batch.cpu().data.numpy()))
-                     #else:
-                        #d = None
+                X_batch = X_batch.to(device)
+                y_hat_batch = self.net(X_batch).cpu().data.numpy()
+                y_hats = np.append(y_hats, y_hat_batch)
+                # y = np.append(y,y_batch.data.numpy())
 
-                     if output_all and len(output_vals) > 0:
-                        x_all = self.net.forward_all(X_batch)
-                        for val in output_vals:
-                            x_alls[val].append(x_all[val].cpu().data.numpy())
+                if output_all and len(output_vals) > 0:
+                    x_all = self.net.forward_all(X_batch)
+                    for val in output_vals:
+                        x_alls[val].append(x_all[val].cpu().data.numpy())
 
-        """
-        while True:
-            X_ = Variable(torch.from_numpy(X[i_start:i_end,:,:,:]).float(), requires_grad=False)
-            if use_gpu:
-                X_ = X_.cuda()
-            y_hat = self.net(X_).cpu().data.numpy()
-
-            if output_type == '1ang':
-                y_hats[i_start:i_end] = y_hat.squeeze()
-            elif output_type == '2pos':
-                y_hats[i_start:i_end, :] = y_hat
-
-            if output_all and len(output_vals) > 0:
-                x_all = self.net.forward_all(X_)
-                for val in output_vals:
-                    x_alls[val].append(x_all[val].cpu().data.numpy())
-
-            if i_end == n_samples:
-                break
-            i_start = i_end
-            i_end += min(batch_size, n_samples-i_start)
-        """
  
         if output_type == '1ang':
             y_hat_angles = y_hats
-            if y_exists:
-                d = loss.angular_distance(y_hat_angles, y)
-            else:
-                d = None
+
         elif output_type == '2pos':
             # Calculate angles
             y_hats = y_hats.reshape(-1,2)
-            y = y.reshape(-1,2)
             y_hat_angles = np.arctan2(y_hats[:,1], y_hats[:,0])
-            if y_exists:
-                y_angles = np.arctan2(y[:,1], y[:,0])
-                d = loss.angular_distance(y_hat_angles, y_angles)
-            else:
-                d = None
 
         elif output_type == '2pos1err':#dont worry about error for now
             # Calculate angles
             y_hats = y_hats.reshape(-1,3)
-            y = y.reshape(-1,2)
-
-            if bayes:
-                #Use circular mean and std
-                C = y_hats[:,0].reshape(20,-1)
-                S = y_hats[:,1].reshape(20,-1)
-                
-                var_drop = -2 * np.log( np.sqrt( np.sum(C,0)**2 + np.sum(S,0)**2 ) / 20 )
-                vars = np.reshape(np.exp(y_hats[:,2]), (20,-1))
-                vars = np.mean(vars,0)
-                errors = np.sqrt( vars + var_drop )                
-                y_hat_angles = np.array( (np.arctan2( y_hats[:,1].reshape(21,-1)[-1,:], y_hats[:,0].reshape(21,-1)[-1] ), errors) )
-            else:
-                y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])) ))
-
-            if y_exists:
-                y_angles = np.arctan2(y[:,1], y[:,0])
-                d = loss.angular_distance(y_hat_angles, y_angles)
-            else:
-                d = None
+            y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])) ))
 
         elif output_type == '7pos2err':#dont worry about error for now
             # Calculate angles
             y_hats = y_hats.reshape(-1,9)
-            y = y.reshape(-1,4)
-
-            if bayes:
-                #Use circular mean and std
-                C = y_hats[:,0].reshape(20,-1)
-                S = y_hats[:,1].reshape(20,-1)
-                
-                var_drop = -2 * np.log( np.sqrt( np.sum(C,0)**2 + np.sum(S,0)**2 ) / 20 )
-                vars = np.reshape(np.exp(y_hats[:,2]), (20,-1))
-                vars = np.mean(vars,0)
-                errors = np.sqrt( vars + var_drop )                
-                y_hat_angles = np.array( (np.arctan2( y_hats[:,1].reshape(21,-1)[-1,:], y_hats[:,0].reshape(21,-1)[-1] ), errors) )
-            else:
-                y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), np.arctan2(y_hats[:,4], y_hats[:,3]), np.sqrt(np.exp(y_hats[:,5])), y_hats[:,6],
+            y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), np.arctan2(y_hats[:,4], y_hats[:,3]), np.sqrt(np.exp(y_hats[:,5])), y_hats[:,6],
                                          y_hats[:,7], y_hats[:,8] ))
-
-            if y_exists:
-                y_angles = np.arctan2(y[:,1], y[:,0])
-                d = loss.angular_distance(y_hat_angles, y_angles)
-            else:
-                d = None
 
         elif output_type == 'abs_pts':
              y_hats = y_hats.reshape(-1,2)
-             y = y.reshape(-1,2)
              y_hat_angles = None
-             if y_exists:
-                d = y - y_hats
-             else:
-                d = None
 
         elif output_type == '5pos1err':#dont worry about error for now
             # Calculate angles
             y_hats = y_hats.reshape(-1,6)
-            #y = y.reshape(-1,5)
-
-            if bayes:
-                #Use circular mean and std
-                raise("Not implemented")
-                C = y_hats[:,0].reshape(20,-1)
-                S = y_hats[:,1].reshape(20,-1)
-                
-                var_drop = -2 * np.log( np.sqrt( np.sum(C,0)**2 + np.sum(S,0)**2 ) / 20 )
-                vars = np.reshape(np.exp(y_hats[:,2]), (20,-1))
-                vars = np.mean(vars,0)
-                errors = np.sqrt( vars + var_drop )                
-                y_hat_angles = np.array( (np.arctan2( y_hats[:,1].reshape(21,-1)[-1,:], y_hats[:,0].reshape(21,-1)[-1] ), errors) )
-            else:
-                y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), y_hats[:,3],
-                                         y_hats[:,4], y_hats[:,5]))
-            if y_exists:
-                y_angles = np.arctan2(y[:,1], y[:,0])
-                d = loss.angular_distance(y_hat_angles, y_angles)
-            else:
-                d = None
+            y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), y_hats[:,3],
+                                        y_hats[:,4], y_hats[:,5]))
 
         elif output_type == 'abs_pts':
              y_hats = y_hats.reshape(-1,2)
-             y = y.reshape(-1,2)
              y_hat_angles = None
-             if y_exists:
-                d = y - y_hats
-             else:
-                d = None
+
         elif output_type == 'CE':
              y_hats = y_hats.reshape(-1,1)
              y_hat_angles = np.argmax(y_hats, axis=1)
-             if y_exists:
-                d = np.sum((y_hat_angles == y)*1) / len(y)
-             else:
-                d = None #represents accuracy for CE loss
-        
-        if y_exists:
-            if output_type == 'CE':
-               mse = d
-            else:
-               mse = np.mean(np.square(d))
-        else:
-            mse = None
 
-        if output_all:
-            metrics = {
-                'd': d,  # angle distance - can use this to calculate mean abs loss in post-processing if desired
-                'y_hat': y_hats,  # the actual predictions - could be a vec or a 2 col mat
-                'y_hat_angles': y_hat_angles  # predicted angles
-            }
+        metrics = {
+            # 'd': d,  # angle distance - can use this to calculate mean abs loss in post-processing if desired
+            'y_hat': y_hats,  # the actual predictions - could be a vec or a 2 col mat
+            'y_hat_angles': y_hat_angles  # predicted angles
+        }
 
-            # Combine layer results and store in metrics dict
-            if len(output_vals) > 0:
-                for val in output_vals:
-                    metrics[val] = np.concatenate(x_alls[val], axis=0)
+        # Combine layer results and store in metrics dict
+        if len(output_vals) > 0:
+            for val in output_vals:
+                metrics[val] = np.concatenate(x_alls[val], axis=0)
 
-            return mse, metrics
-        else:
-            return mse
+        return metrics
