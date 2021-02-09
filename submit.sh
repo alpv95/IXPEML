@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH --job-name=GPUtest
-#SBATCH --time=150:00
+#SBATCH --time=200:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=30G
@@ -19,7 +19,7 @@ ml py-numpy/1.17.2_py36
 #srun python3 gpu_test.py --data_list review_unpol/train/ --ensemble flat --save flat_all_unpol
 
 #srun python3 gpu_test.py --model_list 733flat1_mserrall2_expectile0p2_alpha0p8 --data_list review_unpol/test/ --save alphaflat2
-srun python3 gpu_test.py --data_list pol_heads/train/ --ensemble bessel_rand --save pol_heads_bess
+srun python3 gpu_test.py --data_list newpaper_pol/train/ --ensemble bessel_rand --save newpaper_pol_bess_rand_geo
 
 #srun python3 gpu_test.py --save review2_733unpol_test --data_list fom_unpol/test/ --model_list 733flat_mserrall1 733flat_mserrall1_3 733flat_mserrall1_El1loss_2 733flat_mserrall1_small1 733flat_mserrall1_small2 733_mserrall1_2 733flat_mserrall1_2 733flat_mserrall1_El1loss 733flat_mserrall1_El1loss_small 733flat_mserrall1_small1_2 733_mserrall1
 #srun python3 gpu_test.py --data_list paper_plot/train/ --ensemble pol_abs_E --save energy_test
