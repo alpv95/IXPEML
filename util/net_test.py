@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from util import loss
-from util.pydataloader import H5Dataset, ToTensor, ZNormalize, SelfNormalize
+from util.pydataloader import H5Dataset, H5DatasetEval, ToTensor, ZNormalize, SelfNormalize
 from collections import namedtuple
 from nn.cnn import TrackAngleRegressor
 from formats.dense_square import DenseSquareSimTracks
@@ -59,13 +59,13 @@ class NetTest(object):
         up2 = lambda p: os.path.dirname(os.path.dirname(p))
 
         with h5py.File(os.path.join(up2(net), 'opts.h5'),'r') as f:
-             batch_size = 2048 #Can be adjusted if there are memory GPU memory problems during prediction
+             batch_size = 1024 #Can be adjusted if there are memory GPU memory problems during prediction
              losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
 
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))
         meanE, stdE = torch.load(os.path.join(up2(net),"ZNE.pt"))
 
-        dataset = H5Dataset(dataset, datatype=datatype, losstype=losstype, energy_cal=(meanE, stdE),
+        dataset = H5DatasetEval(dataset, datatype=datatype, losstype=losstype, energy_cal=(meanE, stdE),
                                     transform=transforms.Compose([ZNormalize(mean=mean,std=std)]))
 
         kwargs = {'num_workers': 4, 'pin_memory': True}
