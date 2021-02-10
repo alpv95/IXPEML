@@ -228,6 +228,11 @@ class TrackAngleRegressor:
             criterion = cnn_loss.AngularLoss()
             val_criterion = cnn_loss.AngularLoss(size_average=False)
             hparams['outputtype'] = '1ang'
+        elif losstype == 'tailvpeak':
+            criterion = cnn_loss.BinaryLoss()
+            val_criterion = cnn_loss.BinaryLoss(size_average=False)
+            label_number = 1
+            hparams['outputtype'] = '1ang'
         elif losstype == 'cos':
             criterion = cnn_loss.CosineLoss(alpha=hparams['alpha_loss'])
             val_criterion = cnn_loss.CosineLoss(size_average=False)
@@ -501,7 +506,6 @@ class TrackAngleRegressor:
            print("Evaluating on CPU \n")
 
         n_samples = len(data_loader.dataset)
-
         if output_type == '1ang' or output_type == '2pos' or output_type == 'CE' or output_type == 'abs_pts' or output_type == '7pos2err' or output_type == '5pos1err' or output_type == '2pos1err':
             y_hats = np.array([],dtype=np.float32)
             
@@ -517,7 +521,6 @@ class TrackAngleRegressor:
                 X_batch = X_batch.to(device)
                 y_hat_batch = self.net(X_batch).cpu().data.numpy()
                 y_hats = np.append(y_hats, y_hat_batch)
-                # y = np.append(y,y_batch.data.numpy())
 
                 if output_all and len(output_vals) > 0:
                     x_all = self.net.forward_all(X_batch)

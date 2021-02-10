@@ -374,12 +374,12 @@ def pi_ambiguity_mean(ang):
     pi_fix = (np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2)) >= 0.5) * np.pi
     return pi_pi(circular_mean(ang, axis=(1,2)) + pi_fix)
 
-def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
+def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     '''
     Takes output from gpu_test ensemble and re-rotates 3-fold angles appropriately. Also removes repeated outputs for moments.
     '''
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, energies_mom, zs, trgs, xy_abs_pts = angles_tuple
+    energies, energies_sim, energies_mom, zs, trgs, p_tail, xy_abs_pts = results_tuple
 
     ang = triple_angle_reshape(angles, N, augment=aug)
     mom = triple_angle_reshape(moms,N, augment=aug)
@@ -393,59 +393,74 @@ def post_rotate(angles_tuple, N, aug=3, datatype="sim"):
     abs_pts_sim = triple_angle_reshape(abs_pts_sim,N, augment=aug)
     mom_abs_pts = triple_angle_reshape(mom_abs_pts,N, augment=aug)
     zs = triple_angle_reshape(zs, N, augment=1)
+    p_tail = triple_angle_reshape(p_tail, N, augment=aug)
     trgs = triple_angle_reshape(trgs, N, augment=1)
 
     xy_abs_pts = np.reshape(xy_abs_pts, [-1,2,N], "C")[:,:,0]
-    abs_pts = np.mean(np.reshape(abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
     mom_abs_pts = np.mean(np.reshape(mom_abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
-    E_nn = np.mean(np.mean(E_nn[:,:,:],axis=2),axis=1) #E_nn[:,:,(1,2,4,5,6)],axis=2),axis=1)
+    
+    if losstype == 'tailvpeak':
+        p_tail = np.mean(p_tail, axis=(1,2))
+        error_epis = [None]        
+    else:
+        E_nn = np.mean(E_nn, axis=(1,2)) 
+        abs_pts = np.mean(np.reshape(abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
+        if aug == 3:
+            ang = triple_angle_rotate(ang)
+        #combine epistemic and aleatoric errors and average angles
+        error, error_epis = error_combine(ang, error)
+        ang = pi_ambiguity_mean(ang)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
 
-    if aug == 3:
-        ang = triple_angle_rotate(ang)
-
-    #combine epistemic and aleatoric errors and average angles
-    error, error_epis = error_combine(ang, error)
-    ang = pi_ambiguity_mean(ang)
-
     if datatype == "meas":
         A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
-             zs, trgs[:,0,0], xy_abs_pts)
+             zs, trgs[:,0,0], p_tail, xy_abs_pts)
     else:
         A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
-            zs[:,0,0], trgs[:,0,0], xy_abs_pts)
+            zs[:,0,0], trgs[:,0,0], p_tail, xy_abs_pts)
     return A
 
-def fits_save(results, file, datatype):
+def fits_save(results, file, datatype, losstype='mserr1'):
     '''Organizes final fits file save'''
     angles, angles_mom, angles_sim, moms, errors, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, energies_mom, zs, trgs, xy_abs_pts = results
+    energies, energies_sim, energies_mom, zs, trgs, p_tail, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
     hdul = fits.HDUList([hdu])
-    c1 = fits.Column(name='NN_PHI', array=angles, format='E')
+
     c2 = fits.Column(name='MOM_PHI', array=angles_mom, format='E',)
     c4 = fits.Column(name='MOM_ELLIP', array=moms, format='E',)
-    c5 = fits.Column(name='NN_WEIGHT', array=errors, format='E')
-    c16 = fits.Column(name='NN_WEIGHT_EPIS', array=error_epis, format='E')
-    c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
     c7 = fits.Column(name='MOM_ABS', array=mom_abs_pts, format='2E', dim='(2)')
     c8 = fits.Column(name='XY_MOM_ABS', array=xy_abs_pts, format='2E', dim='(2)')
-    c12 = fits.Column(name='XY_NN_ABS', array=square2hex_abs(abs_pts, mom_abs_pts, xy_abs_pts), format='2E', dim='(2)')
-    c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
     c14 = fits.Column(name='MOM_ENERGY', array=energies_mom, format='E')
 
-    if datatype == 'sim':
+    if losstype == 'tailvpeak':
+        c16 = fits.Column(name='P_TAIL', array=p_tail, format='E')
         c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
         c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
         c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
         c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c16, c6, c7, c8, c9, c10, c11, c12, c13, c14])
+        table_hdu = fits.BinTableHDU.from_columns([c16, c2, c4, c7, c8, c14, c3, c9, c13, c10])
+        
     else:
-        c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c16, c6, c7, c8, c11, c12, c14, c15])
+        c1 = fits.Column(name='NN_PHI', array=angles, format='E')      
+        c5 = fits.Column(name='NN_WEIGHT', array=errors, format='E')
+        c16 = fits.Column(name='NN_WEIGHT_EPIS', array=error_epis, format='E')
+        c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
+        c1 = fits.Column(name='NN_PHI', array=angles, format='E')
+        c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
+        c12 = fits.Column(name='XY_NN_ABS', array=square2hex_abs(abs_pts, mom_abs_pts, xy_abs_pts), format='2E', dim='(2)')
+        if datatype == 'sim':
+            c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
+            c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
+            c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
+            c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c16, c6, c7, c8, c9, c10, c11, c12, c13, c14, c16])
+        else:
+            c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c16, c6, c7, c8, c11, c12, c14, c15, c16])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits')

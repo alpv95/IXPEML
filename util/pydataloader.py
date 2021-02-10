@@ -47,13 +47,15 @@ class H5Dataset(Dataset):
                 raise("No energy calibration!")
 
             if (losstype == "mserrall1" or losstype == "mserrall2"):
-                self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
+                self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
                                 self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
             elif (losstype == "mserr"):
-                self.angles = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
+                self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
+            # elif (losstype == "tailvpeak"):
+            #     self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
         else:
             self.trgs = data_all["trg_id"]
-            self.angles = None #torch.zeros(len(self.tracks_cube), 3, 5).float()
+            self.Y = None #torch.zeros(len(self.tracks_cube), 3, 5).float()
     
     def __getitem__(self, index):
         sparse = self.tracks_cube[index]
@@ -69,7 +71,7 @@ class H5Dataset(Dataset):
                 torch.stack([torch.sparse.FloatTensor(sparse[2,0,:2,:].long(), sparse[2,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
                                 torch.sparse.FloatTensor(sparse[2,1,:2,:].long(), sparse[2,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
             ])
-        sample = (track.float(), self.angles[index])
+        sample = (track.float(), self.Y[index])
         return sample
         
     def __len__(self):

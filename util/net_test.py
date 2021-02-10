@@ -60,12 +60,12 @@ class NetTest(object):
 
         with h5py.File(os.path.join(up2(net), 'opts.h5'),'r') as f:
              batch_size = 1024 #Can be adjusted if there are memory GPU memory problems during prediction
-             losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
+             self.losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
 
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))
         meanE, stdE = torch.load(os.path.join(up2(net),"ZNE.pt"))
 
-        dataset = H5DatasetEval(dataset, datatype=datatype, losstype=losstype, energy_cal=(meanE, stdE),
+        dataset = H5DatasetEval(dataset, datatype=datatype, losstype=self.losstype, energy_cal=(meanE, stdE),
                                     transform=transforms.Compose([ZNormalize(mean=mean,std=std)]))
 
         kwargs = {'num_workers': 4, 'pin_memory': True}
@@ -73,25 +73,28 @@ class NetTest(object):
            
         m = TrackAngleRegressor(load_checkpoint=net, input_channels=self.input_channels)
 
-        angles = m.predict(test_loader,bayes=bayes)
+        y_hats = m.predict(test_loader,bayes=bayes)
         angles_mom = (dataset.mom_phis).numpy()
-        if angles.shape[0] == 2:
-            errors = angles[1,:]
-            angles = angles[0,:]
+        mom_abs_pts = np.reshape( (dataset.mom_abs_pts).numpy(), (-1,2), order="C")
+        p_tail = [None]
+        if y_hats.shape[0] == 2:
+            errors = y_hats[1,:]
+            angles = y_hats[0,:]
             mom_abs_pts = [None]
             abs_pts = [None]
             energies = [None]
-        elif angles.shape[0] == 5:
-            errors = angles[1,:]
-            mom_abs_pts = np.reshape( (dataset.mom_abs_pts).numpy(), (-1,2), order="C")
-            abs_pts = np.transpose(angles[2:4,:])
-            energies = angles[4,:]
-            angles = angles[0,:]
+        elif y_hats.shape[0] == 5:
+            errors = y_hats[1,:]
+            abs_pts = np.transpose(y_hats[2:4,:])
+            energies = y_hats[4,:]
+            angles = y_hats[0,:]
         else:
+            print('TAILVPEAK')
+            p_tail = y_hats
+            angles = [None]
             errors = [None]
             abs_pts = [None]
             energies = [None]
-            mom_abs_pts = [None]
                 
         try:
             moms = dataset.moms.numpy()
@@ -103,7 +106,7 @@ class NetTest(object):
             angles_mom = np.ndarray.flatten( angles_mom, "C" )
             moms = np.ndarray.flatten( moms, "C" )
             zs = np.ndarray.flatten( dataset.zs.numpy(), "C" )
-            angles_sim = np.ndarray.flatten( torch.atan2(dataset.angles[:,:,1],dataset.angles[:,:,0]).numpy(), "C" )
+            angles_sim = np.ndarray.flatten( dataset.angles.numpy(), "C" )
             abs_pts_sim = (dataset.abs_pts).numpy()
             abs_pts_sim = np.reshape( abs_pts_sim, (-1,2), order="C" )
             energies_sim = (dataset.energy).numpy()
@@ -124,7 +127,7 @@ class NetTest(object):
             energies_sim = np.round(energies_sim * stdE.item() + meanE.item(), 3)
         energies_mom = (dataset.mom_energy).numpy()
 
-        return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, energies_mom, zs, trgs, xy_abs_pts
+        return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, energies_mom, zs, trgs, p_tail, xy_abs_pts
 
     def stokes_correction(self, angles):
         '''
@@ -227,7 +230,7 @@ class NetTest(object):
             Cn += ( (-1)**(k/2) * scipy.special.binom(n,k) * cs[:,0]**(n-k) * cs[:,1]**k ).sum(0)
         return Cn
 
-    def fit_mod(self, angles, method="stokes", error_weight=1):
+    def fit_mod(self, results, method="stokes", error_weight=1):
         '''
         Fits dataset of angles for modulation factor mu and EVPA phi0 with either standard Stokes method (Kislat et al.), weighted MLE (Peirson et al.) or ellipticity cuts.
         
@@ -246,10 +249,10 @@ class NetTest(object):
         mu_err = []
         phi0 = []
         phi0_err = []
-        _, _, _, moms,errors = angles[:5]
+        _, _, _, moms,errors = results[:5]
         print("Method: {}\n".format(method))
 
-        for i,angle in enumerate(angles[:3]):
+        for i,angle in enumerate(results[:3]):
             if angle[0] is not None:
                 if method == "stokes":
                     angle = np.ndarray.flatten(np.array(angle))
@@ -377,7 +380,7 @@ class NetTest(object):
         '''
         for data in self.datasets:
             name = data.replace(self.data_base,"") + "__" + "ensemble"
-            results = ([],[],[],[],[],[],[],[],[],[],[],[],[],[])
+            results = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
             for i, net in enumerate(self.nets):
                 print(">> NN {}/{} : \n".format(i+1,len(self.nets)))
                 results = tuple(map( np.append, results, self._predict(net, data, bayes) ))
@@ -386,29 +389,31 @@ class NetTest(object):
                 results = self.stokes_correction(results)
 
             #Post processing for rotations and reducing repeated moments outputs
-            results = post_rotate(results, self.n_nets, aug=3, datatype=self.datatype)
+            results = post_rotate(results, self.n_nets, aug=3, datatype=self.datatype, losstype=self.losstype)
 
-            mu, phi0, mu_err, phi0_err = self.fit_mod(results, method=self.method)
-            mu_w, phi0_w, mu_err_w, phi0_err_w = self.fit_mod(results, method="weighted_MLE")
+            if self.losstype != 'tailvpeak':
+                mu, phi0, mu_err, phi0_err = self.fit_mod(results, method=self.method)
+                mu_w, phi0_w, mu_err_w, phi0_err_w = self.fit_mod(results, method="weighted_MLE")
+
+                print(">> Modulation factors and EVPAs for entire dataset -->")
+                print("{}:\n mu + err | phi0 + err\n".format(name))
+                names = ["NN", "Mom.", "True"]
+                algs = ["weighted", "cut", "n/a"]
+                for i,_ in enumerate(mu):
+                    name = names[i]
+                    alg = algs[i]
+                    print(name + " {:.3f} +- {:.3f} | {:.3f} +- {:.3f}\n".format(mu[i],mu_err[i],phi0[i],phi0_err[i]))
+                    print(name + " {:.3f} +- {:.3f} | {:.3f} +- {:.3f} ({})\n".format(mu_w[i],mu_err_w[i],phi0_w[i],phi0_err_w[i], alg))
  
             if self.save_table is not None:
                 name = data.replace(self.data_base,"") + "__" + self.save_table + "__" + "ensemble"
-                fits_save(results, os.path.join(self.save_base, name.replace("/","_")), self.datatype)
+                fits_save(results, os.path.join(self.save_base, name.replace("/","_")), self.datatype, self.losstype)
                 print("Saved to: {}".format(os.path.join(self.save_base, name.replace("/","_") + ".fits"))) 
 
             if self.plot:
                 self.plot_save( results, mu, phi0, name )
-            self.results[name] = (mu, mu_err, phi0_err, phi0)
+            # self.results[name] = (mu, mu_err, phi0_err, phi0)
 
-            print(">> Modulation factors and EVPAs for entire dataset -->")
-            print("{}:\n mu + err | phi0 + err\n".format(name))
-            names = ["NN", "Mom.", "True"]
-            algs = ["weighted", "cut", "n/a"]
-            for i,_ in enumerate(mu):
-                name = names[i]
-                alg = algs[i]
-                print(name + " {:.3f} +- {:.3f} | {:.3f} +- {:.3f}\n".format(mu[i],mu_err[i],phi0[i],phi0_err[i]))
-                print(name + " {:.3f} +- {:.3f} | {:.3f} +- {:.3f} ({})\n".format(mu_w[i],mu_err_w[i],phi0_w[i],phi0_err_w[i], alg))
 
 
 
