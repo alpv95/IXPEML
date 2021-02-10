@@ -50,6 +50,8 @@ parser.add_argument('-pulse','--pulse_cut', action='store_true',
                     help='Whether to cut data about the maximum in the pulse height spectrum as in calibration documents')
 parser.add_argument('--head_only', action='store_true',
                     help='No low or high Z tail tracks')
+parser.add_argument('--tailvpeak', action='store_true',
+                    help='Build dataset with tail or peak label')
 args = parser.parse_args()
 
 
