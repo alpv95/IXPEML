@@ -81,18 +81,21 @@ class builder(object):
 
     def init_build(self, input_file, pulse_cut):
         with fits.open(input_file, memmap=False) as hdu:
-            data = hdu[1].data
-            sim_data = hdu[3].data
+            try:
+                new_columns = hdu['EVENTS'].columns + hdu['MONTE_CARLO'].columns
+                table_hdu = fits.BinTableHDU.from_columns(new_columns)
+                data = table_hdu.data
+            except KeyError:
+                print('Measured Data: No Monte Carlo')
+                data = hdu['EVENTS'].data
 
-        assert 'NUM_CLU' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
+        assert 'DETPHI' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
 
-        #APPLY SOME INITIAL TRACK CUTS HERE AS IN REPORT
-        # cut = (data['NUM_CLU'] > 0)*(abs(data['BARX']) < 6.3)*(abs(data['BARY']) < 6.3)
-        cut = np.ones_like(data['NUM_CLU'])
-        if pulse_cut:
-            (mu,sigma) = norm.fit(data['PI'])
-            cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
-        return data, sim_data, cut
+        # cut = np.ones_like(data['TRG_ID'], dtype=bool)
+        # if pulse_cut:
+        #     (mu,sigma) = norm.fit(data['PI'])
+        #     cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
+        return data
 
     def save(self, split, split_func):
         N_final = len(self.build_result["tracks"])
@@ -146,42 +149,41 @@ class simulated(builder):
             input_file = os.path.join(self.in_base, '{}_{}_recon.fits'.format(dataset.name, energy_str))
             n_train_final = int(dataset.energy**(-self.pl) * 3070000 * self.fraction * aeff(dataset.energy))
 
-            data, sim_data, cut = super().init_build(input_file, pulse_cut)
-            # with fits.open(input_file.replace('_recon',''), memmap=False) as hdu:
-            #     sim_data = hdu[3].data
+            fits_data = super().init_build(input_file, pulse_cut)
 
-            assert data['PHA'].shape == sim_data['PE_PHI'].shape, ".fits file (for simulated parameters) and _recon.fits file (for recovered parameters) do not correspond"
-            cut *= (sim_data['PE_PHI'] != 0.0) #to remove bump in training data
+            #INSERT ANY CUTS HERE
+            cut = (fits_data['PE_PHI'] != 0.0) #to remove bump in training data
             #Only take tracks in the peaks
             if self.head_only:
-                cut *= (sim_data['ABS_Z'] >= 0.95) * (sim_data['ABS_Z'] <= 10.7)
+                cut *= (fits_data['ABS_Z'] >= 0.95) * (fits_data['ABS_Z'] <= 10.7)
+            fits_data = fits_data[cut]
 
-            moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
-            Zs = sim_data['ABS_Z'][cut].astype(np.float32)
-            mom_energies = super().predict_energy(data['PHA'][cut])
-            mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
-            bars = np.column_stack((data['BARX'],data['BARY']))[cut]
-            abs_pts = np.column_stack((sim_data['ABS_X'],sim_data['ABS_Y']))[cut]
-            hex_tracks = SparseHexSimTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-                                            sim_data['PE_PHI'][cut], abs_pts, moms, mom_energies, data['DETPHI'][cut], 
-                                            mom_abs_pts, bars, Zs)
+            # moms = (fits_data['TRK_M2L'] / fits_data['TRK_M2T'])
+            # Zs = fits_data['ABS_Z'].astype(np.float32)
+            # mom_energies = super().predict_energy(fits_data['PHA'])
+            # mom_abs_pts = np.column_stack((fits_data['DETX'],data['DETY']))
+            # bars = np.column_stack((fits_data['BARX'],fits_data['BARY']))
+            # abs_pts = np.column_stack((fits_data['ABS_X'],fits_data['ABS_Y']))
+            # hex_tracks = SparseHexSimTracks(fits_data['PIX_X'][cut], fits_data['PIX_Y'][cut], fits_data['PIX_PHA'][cut], 
+            #                                 fits_data['PE_PHI'][cut], abs_pts, moms, mom_energies, fits_data['DETPHI'][cut], 
+            #                                 mom_abs_pts, bars, Zs)
 
-            print(hex_tracks.n_tracks,"loaded ok")
-            assert hex_tracks.n_tracks >= n_train_final, "Too few tracks, N_final too large."
-            hex_tracks = hex_tracks[np.arange(n_train_final)]
+            print(len(fits_data['DETPHI']),"loaded ok")
+            assert len(fits_data['DETPHI']) >= n_train_final, "Too few tracks, N_final too large."
+            fits_data = fits_data[:n_train_final]
 
-            tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
+            tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(fits_data, self.n_pixels, augment=self.augment, shift=self.shift)
 
             self.build_result["tracks"].extend(tracks)
             self.build_result["angles"][cur_idx : (cur_idx + n_train_final)] = angles 
             self.build_result["mom_phis"][cur_idx : (cur_idx + n_train_final)] = mom_phis
-            self.build_result["moms"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
-            self.build_result["mom_energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_energy)
+            self.build_result["moms"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(fits_data['TRK_M2L'] / fits_data['TRK_M2T']).repeat(self.augment,1).T
+            self.build_result["mom_energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(super().predict_energy(fits_data['PHA']))
             self.build_result["abs"][cur_idx : (cur_idx + n_train_final)] = abs_pts 
             self.build_result["mom_abs"][cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
-            self.build_result["energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy( dataset.energy * np.ones_like(hex_tracks.mom)).repeat(self.augment,1).T
-            self.build_result["xy_abs"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.mom_abs_pt)
-            self.build_result["z"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(hex_tracks.zs)
+            self.build_result["energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(dataset.energy * np.ones_like(fits_data['TRK_M2L'])).repeat(self.augment,1).T
+            self.build_result["xy_abs"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(np.column_stack((fits_data['DETX'],data['DETY'])))
+            self.build_result["z"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(fits_data['ABS_Z'].astype(np.float32))
 
             cur_idx += n_train_final
 
@@ -212,31 +214,25 @@ class measured(builder):
         self.out_files = [os.path.join(self.out_base,'meas_{}_{}/train/'.format(energy_str,  self.datasets[0].pol)),  
                         os.path.join(self.out_base,'meas_{}_{}/test/'.format(energy_str,  self.datasets[0].pol))]
 
-        self.build_result.update([("trg_id", torch.zeros( self.total, dtype=torch.int32 ))]) 
+        self.build_result.update([("trg_id", torch.zeros( self.total, dtype=torch.int32 ))])
+        self.build_result.update([("flag", torch.zeros( self.total, dtype=torch.int32 ))])  
 
     def build(self, meas_file, pulse_cut):
         input_file = os.path.join(self.in_base, meas_file)
-        data, _, cut = super().init_build(input_file, pulse_cut)
+        fits_data = super().init_build(input_file, pulse_cut)
 
-        moms = (data['TRK_M2L'] / data['TRK_M2T'])[cut]
-        mom_energies = super().predict_energy(data['PHA'][cut])
-        mom_abs_pts = np.column_stack((data['DETX'],data['DETY']))[cut]
-        bars = np.column_stack((data['BARX'],data['BARY']))[cut]
-        hex_tracks = SparseHexTracks(data['PIX_X'][cut], data['PIX_Y'][cut], data['PIX_PHA'][cut], 
-                                         moms, mom_energies, data['DETPHI'][cut], mom_abs_pts, bars)
-        trgs = data['TRG_ID'][cut][np.arange(self.total)] 
-        print(hex_tracks.n_tracks,"loaded ok")
-        hex_tracks = hex_tracks[np.arange(self.total)]
+        print(len(fits_data['DETPHI']),"loaded ok")
 
-        tracks, mom_phis, mom_abs_pts = hex2square(hex_tracks, self.n_pixels, augment=self.augment, shift=self.shift)
+        tracks, mom_phis, mom_abs_pts, flags = hex2square(fits_data, self.n_pixels, augment=self.augment, shift=self.shift)
 
         self.build_result["tracks"].extend(tracks)
         self.build_result["mom_phis"][:self.total] = mom_phis.unsqueeze(1)
-        self.build_result["moms"][:self.total] = torch.from_numpy(hex_tracks.mom).repeat(self.augment,1).T
-        self.build_result["mom_energy"][:self.total] = torch.from_numpy(hex_tracks.mom_energy)
+        self.build_result["moms"][:self.total] = torch.from_numpy(fits_data['TRK_M2L'] / fits_data['TRK_M2T']).repeat(self.augment,1).T
+        self.build_result["mom_energy"][:self.total] = torch.from_numpy(super().predict_energy(fits_data['PHA']))
         self.build_result["mom_abs"][:self.total] = mom_abs_pts 
-        self.build_result["trg_id"][:self.total] = torch.from_numpy(trgs.astype(np.int32))
-        self.build_result["xy_abs"][:self.total] = torch.from_numpy(hex_tracks.mom_abs_pt) #moment abs pts in hex grid to anchor square grid coordinates
+        self.build_result["trg_id"][:self.total] = torch.from_numpy(fits_data['TRG_ID'].astype(np.int32))
+        self.build_result["flag"][:self.total] = flags
+        self.build_result["xy_abs"][:self.total] = torch.from_numpy(np.column_stack((fits_data['DETX'],fits_data['DETY']))) #moment abs pts in hex grid to anchor square grid coordinates
 
 
 

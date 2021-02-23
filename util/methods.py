@@ -379,7 +379,7 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     Takes output from gpu_test ensemble and re-rotates 3-fold angles appropriately. Also removes repeated outputs for moments.
     '''
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, energies_mom, zs, trgs, p_tail, xy_abs_pts = results_tuple
+    energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts = results_tuple
 
     ang = triple_angle_reshape(angles, N, augment=aug)
     mom = triple_angle_reshape(moms,N, augment=aug)
@@ -395,6 +395,7 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     zs = triple_angle_reshape(zs, N, augment=1)
     p_tail = triple_angle_reshape(p_tail, N, augment=aug)
     trgs = triple_angle_reshape(trgs, N, augment=1)
+    flags = triple_angle_reshape(flags, N, augment=1)
 
     xy_abs_pts = np.reshape(xy_abs_pts, [-1,2,N], "C")[:,:,0]
     mom_abs_pts = np.mean(np.reshape(mom_abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
@@ -416,16 +417,16 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
 
     if datatype == "meas":
         A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
-             zs, trgs[:,0,0], p_tail, xy_abs_pts)
+             zs, trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     else:
         A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
-            zs[:,0,0], trgs[:,0,0], p_tail, xy_abs_pts)
+            zs[:,0,0], trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     return A
 
 def fits_save(results, file, datatype, losstype='mserr1'):
     '''Organizes final fits file save'''
     angles, angles_mom, angles_sim, moms, errors, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, energies_mom, zs, trgs, p_tail, xy_abs_pts = results
+    energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
     hdul = fits.HDUList([hdu])
@@ -437,12 +438,12 @@ def fits_save(results, file, datatype, losstype='mserr1'):
     c14 = fits.Column(name='MOM_ENERGY', array=energies_mom, format='E')
 
     if losstype == 'tailvpeak':
-        c16 = fits.Column(name='P_TAIL', array=p_tail, format='E')
+        c17 = fits.Column(name='P_TAIL', array=p_tail, format='E')
         c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
         c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
         c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
         c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-        table_hdu = fits.BinTableHDU.from_columns([c16, c2, c4, c7, c8, c14, c3, c9, c13, c10])
+        table_hdu = fits.BinTableHDU.from_columns([c17, c2, c4, c7, c8, c14, c3, c9, c13, c10])
         
     else:
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')      
@@ -457,10 +458,11 @@ def fits_save(results, file, datatype, losstype='mserr1'):
             c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
             c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
             c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c16, c6, c7, c8, c9, c10, c11, c12, c13, c14, c16])
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c16, c6, c7, c8, c9, c10, c11, c12, c13, c14])
         else:
             c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
-            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c16, c6, c7, c8, c11, c12, c14, c15, c16])
+            c18 = fits.Column(name='FLAG', array=flags, format='J',)
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c16, c6, c7, c8, c11, c12, c14, c15, c18])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits')

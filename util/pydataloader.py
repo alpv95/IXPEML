@@ -55,6 +55,7 @@ class H5Dataset(Dataset):
             #     self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
         else:
             self.trgs = data_all["trg_id"]
+            self.flags = data_all["flag"]
             self.Y = None #torch.zeros(len(self.tracks_cube), 3, 5).float()
     
     def __getitem__(self, index):

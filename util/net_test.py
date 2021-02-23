@@ -61,7 +61,7 @@ class NetTest(object):
         with h5py.File(os.path.join(up2(net), 'opts.h5'),'r') as f:
              batch_size = 1024 #Can be adjusted if there are memory GPU memory problems during prediction
              self.losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
-
+        
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))
         meanE, stdE = torch.load(os.path.join(up2(net),"ZNE.pt"))
 
@@ -111,9 +111,11 @@ class NetTest(object):
             abs_pts_sim = np.reshape( abs_pts_sim, (-1,2), order="C" )
             energies_sim = (dataset.energy).numpy()
             energies_sim = np.ndarray.flatten( energies_sim, "C" )
-            trgs = [None] 
+            trgs = [None]
+            flags = [None] 
         else:
             trgs = dataset.trgs.numpy()
+            flags = dataset.flags.numpy()
             angles_sim = [None]
             abs_pts_sim = [None]
             energies_sim = [None]
@@ -127,7 +129,7 @@ class NetTest(object):
             energies_sim = np.round(energies_sim * stdE.item() + meanE.item(), 3)
         energies_mom = (dataset.mom_energy).numpy()
 
-        return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, energies_mom, zs, trgs, p_tail, xy_abs_pts
+        return angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts
 
     def stokes_correction(self, angles):
         '''
@@ -380,7 +382,7 @@ class NetTest(object):
         '''
         for data in self.datasets:
             name = data.replace(self.data_base,"") + "__" + "ensemble"
-            results = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
+            results = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
             for i, net in enumerate(self.nets):
                 print(">> NN {}/{} : \n".format(i+1,len(self.nets)))
                 results = tuple(map( np.append, results, self._predict(net, data, bayes) ))
