@@ -79,8 +79,6 @@ class ixpeLvl1aFitsFile : public ixpeFitsFile
   void writeGtiHeader(const ixpeFitsHeader& lvl1Header);
 
   //! Write an event into the main binary table
-  //void write(std::vector<int>& eventIds, const std::vector<ixpeEvent>& events,
-  //           const std::vector<std::vector<ixpeTrack>>& vectorTracks);
   void write(int eventId, const ixpeEvent& event,
              const std::vector<ixpeTrack>& tracks,
              ProcStatusMask_t procStatusMask = 0);

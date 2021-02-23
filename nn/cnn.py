@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn.init as weight_init
 from torch.autograd import Variable
+from scipy.special import expit
 from nn import cnn_loss
 from util import loss
 
@@ -99,7 +100,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, output_num)
-        self.sigmoid = nn.Sigmoid() #for tailvpeak only
+        # self.sigmoid = nn.Sigmoid() #for tailvpeak training only
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -118,7 +119,7 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        out = self.sigmoid(out)
+        # out = self.sigmoid(out) #for tailvpeak training only
         return out
 
 
@@ -531,7 +532,8 @@ class TrackAngleRegressor:
 
  
         if output_type == '1ang':
-            y_hat_angles = y_hats
+            #Apply sigmoid to tailvpeak outputs
+            y_hat_angles = expit(y_hats)
 
         elif output_type == '2pos':
             # Calculate angles

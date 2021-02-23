@@ -27,7 +27,6 @@ with this program; if not, write to the Free Software Foundation Inc.,
 #include "Recon/include/ixpeTrack.h"
 #include "Io/include/ixpeFitsDataFormat.h"
 #include "Io/include/ixpeLvl1aFitsFile.h"
-#include "Utils/include/ixpeProgressBar.h"
 
 
 /*!
@@ -244,7 +243,6 @@ void ixpeLvl1aFitsFile::createMcBinaryTableExtension()
   Write an event in the fits file.
   The event is written at the row number specified by the m_currentRow
   member variable, which is then incremented by one.
-  Now need to write whole fits file at once, but then modulaton_factor.py wont be able to read properly??
  */
 void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
                               const std::vector<ixpeTrack>& tracks,
@@ -253,16 +251,7 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
   const std::string& extName = ixpeFitsDataFormat::eventsExtensionName();
   // Move to the EVENTS HDU
   selectHdu(extName);
-  
-  //auto bar = ixpeProgressBar(500);
-
-  //for (int eventId : eventIds) {
-  //ixpeEvent event = events[eventId];
-  //std::vector<ixpeTrack> tracks = vectorTracks[eventId];
-
   // Increment the current row pointer to write on the next row
-  //tableExtension(extName).setCurrentRow(eventId+1);
-
   tableExtension(extName).incrementCurrentRow();
   writeCell("PAKTNUMB", event.packetId());
   writeCell("TRG_ID", event.triggerId());
@@ -280,7 +269,6 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
   writeCell("DSU_STATUS", event.dsuStatus());
   writeBitsCell<evtProcMaskSize>("STATUS", procStatusMask);
   writeCell("NUM_PIX", event.numAboveThresholdPixels());
-  
   int numTracks = static_cast<int>(tracks.size());
   writeCell("NUM_CLU", numTracks);
   if (numTracks ==  0) {
@@ -296,40 +284,20 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
       writeCell<float>("EVT_FRA", 1.);
     }
     writeMainTrack(mainTrack);
-
-    if (m_withOptionalFields) {
-       std::vector<float> pix_x(400, std::nan(""));
-       std::vector<float> pix_y(400, std::nan(""));
-       std::vector<event_adc_counts_t> pix_adc(400, -1);
-       int hitcount = 0;
-       for (auto& hit : mainTrack.hits()) {
-          if (hitcount < 400) {
-          pix_x[hitcount] = hit.x;
-          pix_y[hitcount] = hit.y;
-          pix_adc[hitcount] = hit.pulseHeight;
-          hitcount++;
-          } else {
-            break;
-          }
-       }
-       writeCell("PIX_X", const_cast<std::vector<float>&>(pix_x));
-       writeCell("PIX_Y", const_cast<std::vector<float>&>(pix_y));
-       writeCell("PIX_PHA", const_cast<std::vector<event_adc_counts_t>&>(pix_adc));
-    }
   }
-  // if (m_withOptionalFields) {
-  //   // We write the pulse invariant multiplied by 8 and rounded to an integer
-  //   // To do so, we need to create and fill a temporary array here
-  //   auto pha_eqs = std::vector<event_adc_counts_t>();
-  //   pha_eqs.reserve(event.pulseInvariants().size()); // reserving is faster
-  //   for (const auto& pi: event.pulseInvariants()) {
-  //     pha_eqs.push_back(static_cast<event_adc_counts_t>(std::round(pi * 8)));
-  //   }
-  //   writeCell("PIX_PHAS_EQ", pha_eqs);
-  //   // The const_cast is required by the signature of writeCell
-  //   writeCell("PIX_TRK",
-  //             const_cast<std::vector<cluster_id_t>&>(event.clusterIds()));
-  // }
+  if (m_withOptionalFields) {
+    // We write the pulse invariant multiplied by 8 and rounded to an integer
+    // To do so, we need to create and fill a temporary array here
+    auto pha_eqs = std::vector<event_adc_counts_t>();
+    pha_eqs.reserve(event.pulseInvariants().size()); // reserving is faster
+    for (const auto& pi: event.pulseInvariants()) {
+      pha_eqs.push_back(static_cast<event_adc_counts_t>(std::round(pi * 8)));
+    }
+    writeCell("PIX_PHAS_EQ", pha_eqs);
+    // The const_cast is required by the signature of writeCell
+    writeCell("PIX_TRK",
+              const_cast<std::vector<cluster_id_t>&>(event.clusterIds()));
+  }
 }
 
 /*!

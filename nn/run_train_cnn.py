@@ -24,17 +24,11 @@ def main():
 
     use_cluster = True
     data_dir = os.path.realpath('data/')
-    data_file = data_dir + "/expanded/train_heads/"
+    data_file = data_dir + "/expanded/train_heads_low/"
 
-    job = Spec(name='733flat_mserrall2_headonly_2', data_file=data_file, loss='mserrall2', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='733flat_mserrall2_headonly_low', data_file=data_file, loss='mserrall2', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
-
-    #  Get full/through-symlink paths, which are needed by the jobs that run on the cluster
-    #   Run this script from the repo main dir
-    #set1_3p7_meas_dense_square_tracks_0pol_247717trans.h5
-    #set1_6p4_meas_dense_square_tracks_0pol_76789trans.h5
-    #meas_file = os.path.join(data_dir, 'expanded/gen2a_aug/', 'set1_3p7_meas_dense_square_tracks_0pol_247717trans.h5')
-    #meas1_file = os.path.join(data_dir, 'expanded/gen2a_aug/', 'set1_3p7_meas_dense_square_tracks_1pol_247717trans.h5')
+    
     # Set dirs
     job_dir = os.path.join(data_dir, 'nn/', job.name)
     if not os.path.exists(job_dir):

@@ -1,10 +1,4 @@
 #!/bin/bash
-ml python/2.7.13
-ml py-numpy/1.14.3_py27
-ml py-scipy/1.1.0_py27
-ml viz
-ml py-matplotlib/2.2.2_py27
-#ml boost/1.69.0
 
 # See this stackoverflow question
 # http://stackoverflow.com/questions/59895/getting-the-source-directory-of-a-bash-script-from-within
@@ -72,9 +66,9 @@ export GPDSWDOCGIT=$SETUP_DIR/../ixpesw.bitbucket.org
 # If $GPDEXTROOT does not exists, we assume that it's sitting the filesystem
 # right next to $GPDSWROOT.
 #
-#if [ -z "$GPDEXTROOT" ]; then
-export GPDEXTROOT=$SETUP_DIR/../gpdext
-#fi
+if [ -z "$GPDEXTROOT" ]; then
+    export GPDEXTROOT=$SETUP_DIR/../gpdext
+fi
 source $GPDEXTROOT/setup.sh
 echo "GPDEXTROOT set to " $GPDEXTROOT
 
