@@ -286,6 +286,9 @@ void ixpeFitsDataFormat::addLvl1aEventsFixedSizeFields(
 void ixpeFitsDataFormat::addLvl1aEventsVariableSizeFields(
     ixpeFitsBinaryTableExtension& ext)
 {
+  ext.insertField("PIX_X", "400E", " ", TFLOAT);
+  ext.insertField("PIX_Y", "400E", " ", TFLOAT);
+  ext.insertField("PIX_PHA", "400I", " ", TSHORT);
   ext.insertField("PIX_TRK", "QI", "", TSHORT);
   ext.insertField("PIX_PHAS_EQ", "QI", "", TSHORT);
 }
