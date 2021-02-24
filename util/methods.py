@@ -362,12 +362,18 @@ def triple_angle_rotate(ang):
 
 def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom):
     '''Converts abs points from local image coordinates to global grid coords'''
-    return (abs_pts_sq - mom_abs_pts_sq) * np.array([0.05,0.0433]) + xy_abs_mom
+    return (abs_pts_sq - mom_abs_pts_sq) * np.array([PIXEL_X_SPACE,PIXEL_Y_SPACE]) + xy_abs_mom
+
+def optimal_weight(w):
+    ''' Weight to mu100 conversion'''
+    p3 = np.array([-2.69618185,  4.75805627,  1.50399251, -8.41102597,  7.03394096,
+                    -2.62238126,  1.41953572,  0.01280318])
+    return np.dot(p3,np.array([w**7,w**6,w**5,w**4,w**3,w**2,w,1]))
 
 def error_combine(ang, sigma):
     '''Returns combined statistical and systematic uncertainty weights'''
     weight_epistemic = circular_std(ang, axis=(1,2))
-    return geo_mean(weightVM(sigma),axis=(1,2)), weight_epistemic
+    return optimal_weight(geo_mean(weightVM(sigma),axis=(1,2)) * weight_epistemic)
 
 def pi_ambiguity_mean(ang):
     '''Mean track angle from ensemble [-pi,pi]'''
@@ -386,7 +392,7 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     E = triple_angle_reshape(energies_sim,N, augment=aug)
     E_nn = triple_angle_reshape(energies,N, augment=aug)
     E_mom = triple_angle_reshape(energies_mom,N, augment=1)
-    error = triple_angle_reshape(errors,N, augment=aug)
+    error = triple_angle_reshape(errors, N, augment=aug)
     ang_mom = triple_angle_reshape(angles_mom,N, augment=aug)
     ang_sim = triple_angle_reshape(angles_sim,N, augment=aug)
     abs_pts = triple_angle_reshape(abs_pts,N, augment=aug)
@@ -409,23 +415,23 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
         if aug == 3:
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
-        error, error_epis = error_combine(ang, error)
+        error = error_combine(ang, error)
         ang = pi_ambiguity_mean(ang)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
 
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
              zs, trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
             zs[:,0,0], trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     return A
 
 def fits_save(results, file, datatype, losstype='mserr1'):
     '''Organizes final fits file save'''
-    angles, angles_mom, angles_sim, moms, errors, error_epis, abs_pts, mom_abs_pts, abs_pts_sim, \
+    angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
     energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
@@ -448,7 +454,6 @@ def fits_save(results, file, datatype, losstype='mserr1'):
     else:
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')      
         c5 = fits.Column(name='NN_WEIGHT', array=errors, format='E')
-        c16 = fits.Column(name='NN_WEIGHT_EPIS', array=error_epis, format='E')
         c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')
         c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
@@ -458,11 +463,11 @@ def fits_save(results, file, datatype, losstype='mserr1'):
             c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
             c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
             c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c16, c6, c7, c8, c9, c10, c11, c12, c13, c14])
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14])
         else:
             c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
             c18 = fits.Column(name='FLAG', array=flags, format='J',)
-            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c16, c6, c7, c8, c11, c12, c14, c15, c18])
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, c18])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits')
