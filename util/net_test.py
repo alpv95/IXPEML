@@ -59,7 +59,7 @@ class NetTest(object):
         up2 = lambda p: os.path.dirname(os.path.dirname(p))
 
         with h5py.File(os.path.join(up2(net), 'opts.h5'),'r') as f:
-             batch_size = 1024 #Can be adjusted if there are memory GPU memory problems during prediction
+             batch_size = 2048 #Can be adjusted if there are memory GPU memory problems during prediction
              self.losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
         
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))

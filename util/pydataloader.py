@@ -31,7 +31,7 @@ class H5Dataset(Dataset):
         self.mom_phis = data_all["mom_phis"]
         self.xy_abs_pts = data_all["xy_abs"]
         self.mom_abs_pts = torch.mean(data_all["mom_abs"], axis=2) / self.pixels
-        self.tracks_cube = tracks_all
+        self.tracks_cube = tracks_all // 8
         self.length = len(self.tracks_cube)
         print("Dataset size: ", self.length)
         
