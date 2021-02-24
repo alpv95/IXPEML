@@ -1,7 +1,15 @@
 slurm*
 gen4*
 simgen*
+*.fits
+*.pickle
+*.npy
 mods/
+notebooks/
+moments/
+.vscode/
+.slurm*
+.DS*
 
 # Ignore data dir/symlink
 data/
