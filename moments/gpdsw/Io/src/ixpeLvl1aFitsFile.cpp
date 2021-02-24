@@ -285,25 +285,25 @@ void ixpeLvl1aFitsFile::write(int eventId, const ixpeEvent& event,
     }
     writeMainTrack(mainTrack);
 
-    if (m_withOptionalFields) {
-       std::vector<float> pix_x(400, std::nan(""));
-       std::vector<float> pix_y(400, std::nan(""));
-       std::vector<event_adc_counts_t> pix_adc(400, -1);
-       int hitcount = 0;
-       for (auto& hit : mainTrack.hits()) {
-          if (hitcount < 400) {
-          pix_x[hitcount] = hit.x;
-          pix_y[hitcount] = hit.y;
-          pix_adc[hitcount] = hit.pulseHeight;
-          hitcount++;
-          } else {
-            break;
-          }
-       }
-       writeCell("PIX_X", const_cast<std::vector<float>&>(pix_x));
-       writeCell("PIX_Y", const_cast<std::vector<float>&>(pix_y));
-       writeCell("PIX_PHA", const_cast<std::vector<event_adc_counts_t>&>(pix_adc));
-    }
+//    if (m_withOptionalFields) {
+//       std::vector<float> pix_x(400, std::nan(""));
+//       std::vector<float> pix_y(400, std::nan(""));
+//       std::vector<event_adc_counts_t> pix_adc(400, -1);
+//       int hitcount = 0;
+//       for (auto& hit : mainTrack.hits()) {
+//          if (hitcount < 400) {
+//          pix_x[hitcount] = hit.x;
+//          pix_y[hitcount] = hit.y;
+//          pix_adc[hitcount] = hit.pulseHeight;
+//          hitcount++;
+//          } else {
+//            break;
+//          }
+//       }
+//       writeCell("PIX_X", const_cast<std::vector<float>&>(pix_x));
+//       writeCell("PIX_Y", const_cast<std::vector<float>&>(pix_y));
+//       writeCell("PIX_PHA", const_cast<std::vector<event_adc_counts_t>&>(pix_adc));
+//    }
   }
   if (m_withOptionalFields) {
     // We write the pulse invariant multiplied by 8 and rounded to an integer

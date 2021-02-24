@@ -87,7 +87,7 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
     mom_abs_pt_aug = np.empty(2)
     mom_abs_pts_sq = np.zeros((augment, shift, 2)) 
 
-    pha = hex_track['PIX_PHAS_EQ']
+    pha = hex_track['PIX_PHAS_EQ'] // 8 
     mask = hex_track['PIX_TRK'] == 0
     col, row = roi_to_offset(*fits_rec_to_roi(hex_track))
     x, y = xpol_pixel_to_world(col, row)
