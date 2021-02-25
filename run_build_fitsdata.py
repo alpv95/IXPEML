@@ -152,6 +152,7 @@ class simulated(builder):
             fits_data = super().init_build(input_file, pulse_cut)
 
             #INSERT ANY CUTS HERE
+            print(fits_data[-1]) #to 'activate'
             cut = (fits_data['PE_PHI'] != 0.0) #to remove bump in training data
             #Only take tracks in the peaks
             if self.head_only:

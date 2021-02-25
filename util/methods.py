@@ -102,7 +102,7 @@ def stokes(angles):
  
     return 2*np.sqrt(Q**2 + U**2), np.arctan2(U,Q)/2
 
-def weighted_stokes(angles, weights, lambd):
+def weighted_stokes(angles, weights, lambd=1):
     '''If weights equal (or lambd == 0) this reduces to normal Stokes, and Neff == N'''
     if weights is None:
         weights = np.ones(len(angles))
@@ -360,9 +360,9 @@ def triple_angle_rotate(ang):
     ang[:,2,:] += 2*np.pi/3
     return pi_pi(ang)
 
-def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom):
+def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom, num_pixels=50):
     '''Converts abs points from local image coordinates to global grid coords'''
-    return (abs_pts_sq - mom_abs_pts_sq) * np.array([PIXEL_X_SPACE,PIXEL_Y_SPACE]) + xy_abs_mom
+    return num_pixels*(abs_pts_sq - mom_abs_pts_sq) * np.array([PIXEL_X_SPACE,PIXEL_Y_SPACE]) + xy_abs_mom
 
 def optimal_weight(w):
     ''' Weight to mu100 conversion'''
@@ -387,6 +387,7 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
     energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts = results_tuple
 
+    #reshape everybody
     ang = triple_angle_reshape(angles, N, augment=aug)
     mom = triple_angle_reshape(moms,N, augment=aug)
     E = triple_angle_reshape(energies_sim,N, augment=aug)
@@ -395,23 +396,21 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     error = triple_angle_reshape(errors, N, augment=aug)
     ang_mom = triple_angle_reshape(angles_mom,N, augment=aug)
     ang_sim = triple_angle_reshape(angles_sim,N, augment=aug)
-    abs_pts = triple_angle_reshape(abs_pts,N, augment=aug)
-    abs_pts_sim = triple_angle_reshape(abs_pts_sim,N, augment=aug)
-    mom_abs_pts = triple_angle_reshape(mom_abs_pts,N, augment=aug)
     zs = triple_angle_reshape(zs, N, augment=1)
     p_tail = triple_angle_reshape(p_tail, N, augment=aug)
     trgs = triple_angle_reshape(trgs, N, augment=1)
     flags = triple_angle_reshape(flags, N, augment=1)
 
-    xy_abs_pts = np.reshape(xy_abs_pts, [-1,2,N], "C")[:,:,0]
-    mom_abs_pts = np.mean(np.reshape(mom_abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
+    #abs_pts get their own reshaping 
+    xy_abs_pts = np.reshape(xy_abs_pts, [N,-1,2], "C")[0,:,:] 
+    mom_abs_pts = np.mean(np.reshape(mom_abs_pts,[N,-1,aug,2],"C"),axis=0)[:,0,:] 
     
     if losstype == 'tailvpeak':
         p_tail = np.mean(p_tail, axis=(1,2))
         error_epis = [None]        
     else:
         E_nn = np.mean(E_nn, axis=(1,2)) 
-        abs_pts = np.mean(np.reshape(abs_pts,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
+        abs_pts = np.mean(np.reshape(abs_pts,[N,-1,aug,2],"C"),axis=0)[:,0,:]
         if aug == 3:
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
@@ -419,7 +418,7 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
         ang = pi_ambiguity_mean(ang)
 
     if datatype == "sim":
-        abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[-1,2,aug,N],"C"),axis=-1)[:,:,0]
+        abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[N,-1,aug,2],"C"),axis=0)[:,0,:]
 
     if datatype == "meas":
         A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
