@@ -10,7 +10,7 @@ moments/
 .vscode/
 .slurm*
 .DS*
-.net_archive/
+net_archive/
 
 # Ignore data dir/symlink
 data/
