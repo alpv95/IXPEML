@@ -130,9 +130,9 @@ ensembles = { "pol_only": ['final_MSERRALL_PL2_aug1_lowreg_alpha1/models/mom_102
 
       "bessel_rand_small": ['733bessel3/models/mom_1024_91.ptmodel',
  '733bessel3/models/mom_512_171.ptmodel',
- '733bessel1/models/mom_1024_91.ptmodel',],
-#  '733bessel2/models/RLRP_512_91.ptmodel',
-#  '733bessel2/models/mom_4096_171.ptmodel',],
+ '733bessel1/models/mom_1024_91.ptmodel',
+ '733bessel2/models/RLRP_512_91.ptmodel',
+ '733bessel2/models/mom_4096_171.ptmodel',],
 
           "bessel_rand": ['733bessel3/models/mom_1024_91.ptmodel',
  '733bessel3/models/mom_512_171.ptmodel',
