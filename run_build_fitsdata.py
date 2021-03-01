@@ -20,6 +20,7 @@ import argparse
 from astropy import stats
 import pickle
 from util.methods import *
+from astropy.table import hstack,Table
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_base', type=str,
@@ -80,17 +81,21 @@ class builder(object):
                              "mom_energy": torch.zeros( self.total)}
 
     def init_build(self, input_file, pulse_cut):
-        with fits.open(input_file, memmap=False) as hdu:
-            try:
-                new_columns = hdu['EVENTS'].columns + hdu['MONTE_CARLO'].columns
-                table_hdu = fits.BinTableHDU.from_columns(new_columns)
-                data = table_hdu.data
-            except KeyError:
-                print('Measured Data: No Monte Carlo')
-                data = hdu['EVENTS'].data
+        try:
+            t2 = Table.read(input_file, format='fits',hdu='MONTE_CARLO')
+            t1 = Table.read(input_file, format='fits',hdu='EVENTS')
+            data = hstack([t1, t2])
+        except KeyError:
+            t1 = Table.read(input_file, format='fits',hdu='EVENTS')
+            data = t1
+            #Old way may be more memory efficient:
+            # with fits.open(input_file, memmap=False) as hdu:
+            #     print('Measured Data: No Monte Carlo')
+            #     data = hdu['EVENTS'].data
 
-        assert 'DETPHI' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
+        assert 'DETPHI' in [c for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
 
+        #Cuts for calibration, not useful in reality
         # cut = np.ones_like(data['TRG_ID'], dtype=bool)
         # if pulse_cut:
         #     (mu,sigma) = norm.fit(data['PI'])
@@ -151,23 +156,11 @@ class simulated(builder):
 
             fits_data = super().init_build(input_file, pulse_cut)
 
-            #INSERT ANY CUTS HERE
-            print(fits_data[-1]) #to 'activate'
             cut = (fits_data['PE_PHI'] != 0.0) #to remove bump in training data
             #Only take tracks in the peaks
             if self.head_only:
                 cut *= (fits_data['ABS_Z'] >= 0.95) * (fits_data['ABS_Z'] <= 10.7)
             fits_data = fits_data[cut]
-
-            # moms = (fits_data['TRK_M2L'] / fits_data['TRK_M2T'])
-            # Zs = fits_data['ABS_Z'].astype(np.float32)
-            # mom_energies = super().predict_energy(fits_data['PHA'])
-            # mom_abs_pts = np.column_stack((fits_data['DETX'],data['DETY']))
-            # bars = np.column_stack((fits_data['BARX'],fits_data['BARY']))
-            # abs_pts = np.column_stack((fits_data['ABS_X'],fits_data['ABS_Y']))
-            # hex_tracks = SparseHexSimTracks(fits_data['PIX_X'][cut], fits_data['PIX_Y'][cut], fits_data['PIX_PHA'][cut], 
-            #                                 fits_data['PE_PHI'][cut], abs_pts, moms, mom_energies, fits_data['DETPHI'][cut], 
-            #                                 mom_abs_pts, bars, Zs)
 
             print(len(fits_data['DETPHI']),"loaded ok")
             assert len(fits_data['DETPHI']) >= n_train_final, "Too few tracks, N_final too large."
@@ -183,7 +176,7 @@ class simulated(builder):
             self.build_result["abs"][cur_idx : (cur_idx + n_train_final)] = abs_pts 
             self.build_result["mom_abs"][cur_idx : (cur_idx + n_train_final)] = mom_abs_pts 
             self.build_result["energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(dataset.energy * np.ones_like(fits_data['TRK_M2L'])).repeat(self.augment,1).T
-            self.build_result["xy_abs"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(np.column_stack((fits_data['DETX'],data['DETY'])))
+            self.build_result["xy_abs"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(np.column_stack((fits_data['DETX'],fits_data['DETY'])))
             self.build_result["z"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(fits_data['ABS_Z'].astype(np.float32))
 
             cur_idx += n_train_final
@@ -223,6 +216,7 @@ class measured(builder):
         fits_data = super().init_build(input_file, pulse_cut)
 
         print(len(fits_data['DETPHI']),"loaded ok")
+        fits_data = fits_data[:self.total]
 
         tracks, mom_phis, mom_abs_pts, flags = hex2square(fits_data, self.n_pixels, augment=self.augment, shift=self.shift)
 
