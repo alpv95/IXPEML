@@ -75,6 +75,7 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
     sim = False
     flag = 0
 
+    #this line should be fixed
     if len(hex_track) >= 42:
         sim = True
 
@@ -92,13 +93,10 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
     col, row = roi_to_offset(*fits_rec_to_roi(hex_track))
     x, y = xpol_pixel_to_world(col, row)
 
-    xs = x[mask] #cp.copy(hex_track.x)
-    ys = y[mask] #cp.copy(hex_track.y)
-    Qs = pha[mask] #cp.copy(hex_track.Q)
+    xs = x[mask] 
+    ys = y[mask] 
+    Qs = pha[mask] 
 
-    # ys = ys[np.isfinite(ys)] 
-    # xs = xs[np.isfinite(xs)] 
-    # Qs = Qs[Qs != -1]
     tracks_cube = np.zeros((augment, shift, 3, len(Qs)), dtype=np.int16)
 
     mom_phi = hex_track['DETPHI']
@@ -194,23 +192,17 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
         return (tracks_cube, mom_phi, mom_abs_pts_sq, flag)  
 
 
-def hex2square(hex_tracks, n_pixels, augment=3, shift=2):# tracks_cum=None, angles_cum=None,
-    if 'PE_PHI' in [c.name for c in hex_tracks.columns]:
+def hex2square(hex_tracks, n_pixels, augment=3, shift=2):
+    if 'PE_PHI' in [c for c in hex_tracks.columns]:
         sim = True
     else:
         sim = False
 
-    # n_cpu = os.cpu_count()
-    # print("Beginning parallelization on {} cores\n".format(n_cpu))
-    # chunks = [(hex_track, n_pixels, augment, shift) for hex_track in hex_tracks]
-    # chunks = []
-    #with mp.Pool(processes=n_cpu) as pool:
-        # results = pool.imap_unordered(hex2square_sub, hex_tracks)
     results = [None] * len(hex_tracks)
     for i, hex_track in enumerate(hex_tracks):
         results[i] = (hex2square_sub(hex_track))
     print("DONE!")
-    if sim: #Have to deal with Nones in list if skipping some tracks
+    if sim: 
         tracks_cum, angles_cum, abs_pts_cum, mom_phi_cum, mom_abs_pts_cum = zip(*results)
         angles_cum = torch.from_numpy(np.array(angles_cum).astype(np.float))
         abs_pts_cum = torch.from_numpy(np.array(abs_pts_cum).astype(np.float))
@@ -222,7 +214,7 @@ def hex2square(hex_tracks, n_pixels, augment=3, shift=2):# tracks_cum=None, angl
         mom_abs_pts_cum = torch.from_numpy(np.array(mom_abs_pts_cum).astype(np.float))
         flag_cum = torch.from_numpy(np.array(flag_cum).astype(np.int16))
 
-    print(mom_phi_cum.shape)
+    print("Final size: ", mom_phi_cum.shape)
     print("Finished \n")
 
     if sim:
