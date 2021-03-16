@@ -123,7 +123,7 @@ ensembles = { "pol_only": ['final_MSERRALL_PL2_aug1_lowreg_alpha1/models/mom_102
  '733flat1_mserrall2_expectileHuber_alpha0p8/models/mom_1024_161.ptmodel',
  '733flat1_mserrall2_expectileHuber_alpha0p8/models/mom_512_151.ptmodel',],
 
-      "tailvpeak": ['733tailvpeak_reg3/models/mom_4096_81.ptmodel',
+"tailvpeak": ['733tailvpeak_reg3/models/mom_4096_81.ptmodel',
       '733tailvpeak_reg/models/RLRP_1024_61.ptmodel',
       '733tailvpeak3_reg/models/RLRP_2048_36.ptmodel',
       '733tailvpeak3_reg/models/mom_4096_76.ptmodel',],

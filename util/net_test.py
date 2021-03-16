@@ -29,8 +29,8 @@ from util.methods import *
 class NetTest(object):
     """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    model_base = os.path.join(base, "net_archive", "")
-    data_base =  os.path.join(base, "data/expanded","")
+    model_base = os.path.join(base, "data/nn", "")
+    data_base =  os.path.join(base, "data","")
     save_base =  base 
     plot_base = base
 

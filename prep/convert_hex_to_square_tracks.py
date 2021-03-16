@@ -71,12 +71,12 @@ def reflect(x,y,idx):
         xy_mirror = np.matmul(np.array([[np.cos(theta),np.sin(theta)],[np.sin(theta),-np.cos(theta)]]), xy) 
         return xy_mirror[0], xy_mirror[1]
 
-def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
+def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2):
     sim = False
     flag = 0
 
     #this line should be fixed
-    if len(hex_track) >= 42:
+    if hex_track_mc is not None:
         sim = True
 
     if sim:
@@ -107,7 +107,7 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
         return (tracks_cube, mom_phi, mom_abs_pts_sq, flag)
 
     if sim:
-        abs_pt = np.array([hex_track['ABS_X'],hex_track['ABS_Y']])
+        abs_pt = np.array([hex_track_mc['ABS_X'],hex_track_mc['ABS_Y']])
         abs_pt = np.argmin(np.sqrt((xs - abs_pt[0])**2 +  (ys - abs_pt[1])**2))  
     mom_abs_pt = np.argmin(np.sqrt((xs - mom_abs_pt[0])**2 +  (ys - mom_abs_pt[1])**2)) 
 
@@ -127,8 +127,8 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
 
         #reflect
         if sim:
-            reflect_angle = reflect(np.cos(hex_track['PE_PHI']),np.sin(hex_track['PE_PHI']),n_flip)
-            rotation = np.arctan2( reflect_angle[1], reflect_angle[0] ) - hex_track['PE_PHI']
+            reflect_angle = reflect(np.cos(hex_track_mc['PE_PHI']),np.sin(hex_track_mc['PE_PHI']),n_flip)
+            rotation = np.arctan2( reflect_angle[1], reflect_angle[0] ) - hex_track_mc['PE_PHI']
             rotation += n_rot * np.pi/3
 
         xs_aug, ys_aug = reflect(xs,ys,n_flip)
@@ -137,7 +137,7 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
         xs_aug, ys_aug = rot60(xs_aug, ys_aug, n_rot)
 
         if sim:
-            angle_new = hex_track['PE_PHI'] + rotation
+            angle_new = hex_track_mc['PE_PHI'] + rotation
             angle_new = np.mod(angle_new + np.pi ,2*np.pi) - np.pi
             mom_angle_new = hex_track['DETPHI'] + rotation
             mom_angle_new = np.mod(mom_angle_new + np.pi ,2*np.pi) - np.pi
@@ -192,32 +192,40 @@ def hex2square_sub(hex_track, n_pixels=50, augment=3, shift=2):
         return (tracks_cube, mom_phi, mom_abs_pts_sq, flag)  
 
 
-def hex2square(hex_tracks, n_pixels, augment=3, shift=2):
-    if 'PE_PHI' in [c for c in hex_tracks.columns]:
-        sim = True
-    else:
-        sim = False
+def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift=2):
+    if isinstance(hex_tracks, tuple):
+        assert cut is not None, "Need to cut PE_PHI==0 tracks for simulated data" 
+        assert n_final is not None
+        assert n_final <= len(hex_tracks[0]['DETPHI'][cut])
+        results = [None] * n_final
+        i = 0
+        j = 0
+        while j < n_final:
+            if cut[i]:
+                results[j] = hex2square_sub(hex_tracks[0][i], hex_tracks[1][i], augment=augment)
+                j += 1
+            i += 1 
+        print(i,j)
+        print("DONE!")
 
-    results = [None] * len(hex_tracks)
-    for i, hex_track in enumerate(hex_tracks):
-        results[i] = (hex2square_sub(hex_track))
-    print("DONE!")
-    if sim: 
         tracks_cum, angles_cum, abs_pts_cum, mom_phi_cum, mom_abs_pts_cum = zip(*results)
         angles_cum = torch.from_numpy(np.array(angles_cum).astype(np.float))
         abs_pts_cum = torch.from_numpy(np.array(abs_pts_cum).astype(np.float))
         mom_phi_cum = torch.from_numpy(np.array(mom_phi_cum).astype(np.float))
         mom_abs_pts_cum = torch.from_numpy(np.array(mom_abs_pts_cum).astype(np.float))
+        print("Final size: ", mom_phi_cum.shape)
+        print("Finished \n")
+        return tracks_cum, angles_cum, mom_phi_cum, abs_pts_cum, mom_abs_pts_cum
     else:
+        results = [None] * len(hex_tracks)
+        for i, hex_track in enumerate(hex_tracks):
+            results[i] = hex2square_sub(hex_track, augment=augment)
+        print("DONE!")
+
         tracks_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum = zip(*results)
         mom_phi_cum = torch.from_numpy(np.array(mom_phi_cum).astype(np.float))
         mom_abs_pts_cum = torch.from_numpy(np.array(mom_abs_pts_cum).astype(np.float))
         flag_cum = torch.from_numpy(np.array(flag_cum).astype(np.int16))
-
-    print("Final size: ", mom_phi_cum.shape)
-    print("Finished \n")
-
-    if sim:
-       return tracks_cum, angles_cum, mom_phi_cum, abs_pts_cum, mom_abs_pts_cum
-    else:
-       return tracks_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum
+        print("Final size: ", mom_phi_cum.shape)
+        print("Finished \n")
+        return tracks_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum
