@@ -14,5 +14,5 @@ ml viz
 ml py-matplotlib/2.1.2_py36
 ml py-numpy/1.17.2_py36
 
-srun python3 gpu_test.py --data_list spectra/GXquad/train/ --save tailvpeak --ensemble tailvpeak
+srun python3 gpu_test.py --data_list spectra/ISP/train/ --save bess3
 

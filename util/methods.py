@@ -33,9 +33,9 @@ def geo_mean(iterable, axis):
     a = np.log(iterable)
     return np.exp(a.mean(axis=axis))
 
-def circular_mean(angles, axis):
+def circular_mean(angles, weights, axis):
     '''Arg of first moment of Von Mises distribution'''
-    mean = np.array([np.mean(np.cos(2*angles),axis=axis), np.mean(np.sin(2*angles),axis=axis)])
+    mean = np.array([np.mean(weights*np.cos(2*angles),axis=axis), np.mean(weights*np.sin(2*angles),axis=axis)]) / np.sum(weights,axis=axis)
     return 0.5*np.arctan2(mean[1],mean[0])
 
 def circular_std(angles, axis):
@@ -490,10 +490,10 @@ def error_combine(ang, sigma):
     weight_epistemic = circular_std(ang, axis=(1,2))
     return optimal_weight(geo_mean(weightVM(sigma),axis=(1,2)) * weight_epistemic)
 
-def pi_ambiguity_mean(ang):
+def pi_ambiguity_mean(ang, weight):
     '''Mean track angle from ensemble [-pi,pi]'''
     pi_fix = (np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2)) >= 0.5) * np.pi
-    return pi_pi(circular_mean(ang, axis=(1,2)) + pi_fix)
+    return pi_pi(circular_mean(ang, weight, axis=(1,2)) + pi_fix)
 
 def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     '''
@@ -529,23 +529,23 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
         if aug == 3:
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
-        error = error_combine(ang, error)
-        ang = pi_ambiguity_mean(ang)
+        weight = error_combine(ang, error)
+        ang = pi_ambiguity_mean(ang, weight)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[N,-1,aug,2],"C"),axis=0)[:,0,:]
 
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], weight, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
              zs, trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], error, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], weight, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
             zs[:,0,0], trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     return A
 
 def fits_save(results, file, datatype, losstype='mserr1'):
     '''Organizes final fits file save'''
-    angles, angles_mom, angles_sim, moms, errors, abs_pts, mom_abs_pts, abs_pts_sim, \
+    angles, angles_mom, angles_sim, moms, weights, abs_pts, mom_abs_pts, abs_pts_sim, \
     energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
@@ -567,7 +567,7 @@ def fits_save(results, file, datatype, losstype='mserr1'):
         
     else:
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')      
-        c5 = fits.Column(name='NN_WEIGHT', array=errors, format='E')
+        c5 = fits.Column(name='NN_WEIGHT', array=weights, format='E')
         c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')
         c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
