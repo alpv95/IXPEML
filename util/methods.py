@@ -35,7 +35,7 @@ def geo_mean(iterable, axis):
 
 def circular_mean(angles, weights, axis):
     '''Arg of first moment of Von Mises distribution'''
-    mean = np.array([np.mean(weights*np.cos(2*angles),axis=axis), np.mean(weights*np.sin(2*angles),axis=axis)]) / np.sum(weights,axis=axis)
+    mean = np.array([np.mean(weights*np.cos(2*angles), axis=axis), np.mean(weights*np.sin(2*angles), axis=axis)]) / np.sum(weights,axis=axis)
     return 0.5*np.arctan2(mean[1],mean[0])
 
 def circular_std(angles, axis):
@@ -530,7 +530,7 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
         weight = error_combine(ang, error)
-        ang = pi_ambiguity_mean(ang, weight)
+        ang = pi_ambiguity_mean(ang, 1/error**2)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[N,-1,aug,2],"C"),axis=0)[:,0,:]
@@ -584,4 +584,4 @@ def fits_save(results, file, datatype, losstype='mserr1'):
             table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, c18])
 
     hdul.append(table_hdu)
-    hdul.writeto(file + '.fits')
+    hdul.writeto(file + '.fits', overwrite=True)

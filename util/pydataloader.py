@@ -49,10 +49,10 @@ class H5Dataset(Dataset):
             if (losstype == "mserrall1" or losstype == "mserrall2"):
                 self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
                                 self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
-            elif (losstype == "mserr"):
-                self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
-            # elif (losstype == "tailvpeak"):
-            #     self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles)),2).float()
+            elif (losstype == "energy"):
+                self.Y = self.energy.float()
+            elif (losstype == "tailvpeak"):
+                self.Y = torch.where(torch.lt(self.zs, 0.95) + torch.gt(self.zs, 10.7), torch.tensor(1), torch.tensor(0)).float()
         else:
             self.trgs = data_all["trg_id"]
             self.flags = data_all["flag"]

@@ -80,7 +80,7 @@ class ResNet(nn.Module):
         self.p_drop = p_drop
         self.input_channels = input_channels
         
-        if outputtype == '1ang':
+        if outputtype == '1ang' or outputtype == '1energy':
             output_num = 1
         elif outputtype == '2pos' or outputtype == 'abs_pts':
             output_num = 2
@@ -100,7 +100,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, output_num)
-        # self.sigmoid = nn.Sigmoid() #for tailvpeak training only
+        # self.sigmoid = nn.Sigmoid() #for tailvpeak training only, now included separately in Binary loss function
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -227,10 +227,11 @@ class TrackAngleRegressor:
             val_criterion = cnn_loss.MSErrLoss(size_average=False, alpha=hparams['alpha_loss'], Z=hparams['Z'])
             label_number = 2
             hparams['outputtype'] = '2pos1err'
-        elif losstype == 'ang':
-            criterion = cnn_loss.AngularLoss()
-            val_criterion = cnn_loss.AngularLoss(size_average=False)
-            hparams['outputtype'] = '1ang'
+        elif losstype == 'energy':
+            criterion = cnn_loss.MSErrLoss()
+            val_criterion = cnn_loss.MSErrLoss(size_average=False)
+            label_number = 1
+            hparams['outputtype'] = '1energy'
         elif losstype == 'tailvpeak':
             criterion = cnn_loss.BinaryLoss()
             val_criterion = cnn_loss.BinaryLoss(size_average=False)
@@ -347,7 +348,7 @@ class TrackAngleRegressor:
  
 
             #evaluate on validation set
-            if ((epoch-1) % 2 == 0):
+            if ((epoch-1) % 3 == 0):
                self.net.eval()
                val_loss = 0
                val_acc = 0
@@ -363,11 +364,13 @@ class TrackAngleRegressor:
                         val_loss += val_criterion(y_hat_batch, y_batch).item() # sum up batch loss
                         if losstype == 'CE':
                             val_acc += np.sum((np.argmax(y_hat_batch.data.cpu().numpy(), axis=1) == y_batch.data.cpu().numpy())*1)
-               val_loss /= len(val_loader.dataset) * 2 #(y_batch.shape[0] / batch_size)
+                        elif losstype == 'tailvpeak':
+                            val_acc += np.sum((np.where(np.squeeze(expit(y_hat_batch.data.cpu().numpy())) > 0.5, 1, 0) == y_batch.data.cpu().numpy())*1)
+               val_loss /= len(val_loader.dataset) #(y_batch.shape[0] / batch_size)
                val_losses.append(val_loss)
                val_steps.append(epoch * math.ceil(n_samples / batch_size) )
-               if losstype == 'CE':
-                  val_acc /= len(val_loader.dataset) * 2
+               if losstype == 'CE' or losstype == 'tailvpeak':
+                  val_acc /= len(val_loader.dataset)
                   print('\n Validation Set Accuracy: {:.4f}\n'.format(val_acc))
                print('\nValidation set - Average loss: {:.4f}\n'.format(val_loss))
 
@@ -509,8 +512,7 @@ class TrackAngleRegressor:
            print("Evaluating on CPU \n")
 
         n_samples = len(data_loader.dataset)
-        if output_type == '1ang' or output_type == '2pos' or output_type == 'CE' or output_type == 'abs_pts' or output_type == '7pos2err' or output_type == '5pos1err' or output_type == '2pos1err':
-            y_hats = np.array([],dtype=np.float32)
+        y_hats = np.array([],dtype=np.float32)
             
         if output_all and len(output_vals) > 0:
             x_alls = {}
@@ -534,6 +536,9 @@ class TrackAngleRegressor:
         if output_type == '1ang':
             #Apply sigmoid to tailvpeak outputs
             y_hat_angles = expit(y_hats)
+
+        elif output_type == '1energy':
+            y_hat_angles = y_hats
 
         elif output_type == '2pos':
             # Calculate angles

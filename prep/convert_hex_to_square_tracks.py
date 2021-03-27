@@ -205,8 +205,6 @@ def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift
                 results[j] = hex2square_sub(hex_tracks[0][i], hex_tracks[1][i], augment=augment)
                 j += 1
             i += 1 
-        print(i,j)
-        print("DONE!")
 
         tracks_cum, angles_cum, abs_pts_cum, mom_phi_cum, mom_abs_pts_cum = zip(*results)
         angles_cum = torch.from_numpy(np.array(angles_cum).astype(np.float))

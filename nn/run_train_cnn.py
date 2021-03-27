@@ -24,9 +24,9 @@ def main():
 
     use_cluster = True
     data_dir = os.path.realpath('data/')
-    data_file = data_dir + "/expanded/train_heads_low/"
+    data_file = data_dir + "/expanded/true_flat_0p1/"
 
-    job = Spec(name='733flat_mserrall2_headonly_low', data_file=data_file, loss='mserrall2', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='733flat_tailvpeak_0p1', data_file=data_file, loss='tailvpeak', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
     
     # Set dirs
@@ -50,7 +50,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 4096, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
@@ -60,7 +60,7 @@ def main():
         'lambda_E': job.lambda_E,
         'Z': job.Z,
         'input_channels': job.input_channels,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams1 = {  # Smaller test set values
         'conv1channels': 16,
@@ -68,7 +68,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 2048, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
@@ -78,7 +78,7 @@ def main():
         'dropout': 0.0,
         'input_channels': job.input_channels,
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams2 = {  # Smaller test set values
         'conv1channels': 16,
@@ -86,7 +86,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 512, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
@@ -96,7 +96,7 @@ def main():
         'dropout': 0.0,
         'input_channels': job.input_channels,
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams3 = {  # Smaller test set values
         'conv1channels': 16,
@@ -104,7 +104,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 1024, #[64],
         'verbose': 1, #[1],
         'Z': job.Z,
@@ -114,7 +114,7 @@ def main():
         'input_channels': job.input_channels,
         'optim_method': job.optim_method,
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams4 = {  # Smaller test set values
         'conv1channels': 16,
@@ -122,7 +122,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 4096, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
@@ -132,7 +132,7 @@ def main():
         'dropout': 0.0,
         'input_channels': job.input_channels,
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams5 = {  # Smaller test set values
         'conv1channels': 16,
@@ -140,7 +140,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 2048, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
@@ -150,7 +150,7 @@ def main():
         'dropout': 0.0,
         'input_channels': job.input_channels,
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams6 = {  # Smaller test set values
         'conv1channels': 16,
@@ -158,7 +158,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 512, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
@@ -168,7 +168,7 @@ def main():
         'dropout': 0.0,
         'input_channels': job.input_channels,
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams7 = {  # Smaller test set values
         'conv1channels': 16,
@@ -176,7 +176,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 1024, #[64],
         'verbose': 1, #[1],
         'Z': job.Z,
@@ -186,7 +186,7 @@ def main():
         'input_channels': job.input_channels,
         'optim_method': "mom",
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams8 = {  # Smaller test set values
         'conv1channels': 16,
@@ -194,7 +194,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 6144, #[64],
         'verbose': 1, #[1],
         'Z': 1e-6,
@@ -204,7 +204,7 @@ def main():
         'input_channels': job.input_channels,
         'optim_method': "mom",
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
     hparams9 = {  # Smaller test set values
         'conv1channels': 16,
@@ -212,7 +212,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 5e-5, #[5e-4],
+        'wd': 1e-2, #[5e-5],
         'batch_size': 6144, #[64],
         'verbose': 1, #[1],
         'Z': 1e-6,
@@ -222,7 +222,7 @@ def main():
         'input_channels': job.input_channels,
         'optim_method': "mom",
         'alpha_loss': job.alpha_loss,
-        'n_epochs': 191, #[50]
+        'n_epochs': 171, #[50]
     } 
 
     hparamsets = [hparams, hparams1, hparams2, hparams3, hparams4, hparams5, hparams6, hparams7,] #[hparams, hparams1, hparams2] #build_hparamsets(hparams)
@@ -293,7 +293,7 @@ def main():
         'proc': job.n_threads,
         'mem': 22,  # GB
         # 'time': 72,  # hr, a target time for all multistarts in a job
-        'time': 35.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
+        'time': 24.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
         'working_dir': working_dir,
         'name': 'train_{}'.format(job.name),
         'gpus': 4,
