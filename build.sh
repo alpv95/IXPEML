@@ -1,10 +1,10 @@
 #!/bin/bash
 #
 #SBATCH --job-name=BUILD
-#SBATCH --time=70:00
+#SBATCH --time=180:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem-per-cpu=15G
+#SBATCH --mem-per-cpu=25G
 #SBATCH --partition=owners
 ##SBATCH --array=5-8 ##these are the SLURM task ids
 
@@ -21,7 +21,7 @@ ml py-matplotlib/2.1.2_py36
 
 #srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_unpol /home/users/alpv95/khome/tracksml/data/expanded/newpaper_unpol --Erange 1.0 9.0 --fraction 0.0361 --pl 0 --aeff
 #srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_pol3 /home/users/alpv95/khome/tracksml/data/expanded/pol3 --Erange 1.0 9.0 --fraction 0.0091 --pl 0
-srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/spectra /home/users/alpv95/khome/tracksml/data/spectra/ISP
+srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/spectra2 /home/users/alpv95/khome/tracksml/data/expanded/true_flat_0p25 --tailvpeak 0.25 --augment 1 --tot 1100000
 
 
 

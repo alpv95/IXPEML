@@ -8,77 +8,22 @@ import scipy
 from scipy.special import i0,i1
 
 class BinaryLoss(nn.Module):
-    """Angle between input and target vectors, where input vector is an x,y point on the unit circle corresponding
-    to input angle, and target vector has x,y points in [-1,1] x [-1,1] (L_Inf ball).
-
-    Only the angle is used for optimization (for now), but the magnitude of the target vector also conveys some
-    information - the certainty of the prediction/eccentricity of the system. Can report this (or a normalized
-    version that accounts for the max length that's different from the axes vs the corners due to anisotropy).
-    """
     def __init__(self, size_average=True, reduce=True,):
         super(BinaryLoss, self).__init__()
-        self.size_average = size_average
-        self.reduce = reduce
+        self.bceloss = nn.BCELoss(size_average=size_average, reduce=reduce)
+        self.sig = nn.Sigmoid()
 
     def forward(self, input, target):
-        bceloss = nn.BCELoss()
-        loss = bceloss(input[:,0], target)
-        if self.reduce:
-            if self.size_average:
-                loss = torch.mean(loss)
-            else:
-                loss = torch.sum(loss)
-        return loss
+        return self.bceloss(self.sig(input)[:,0], target,)
 
 class MSErrLoss(nn.Module):
-    """Angle between input and target vectors, where input vector is an x,y point on the unit circle corresponding
-    to input angle, and target vector has x,y points in [-1,1] x [-1,1] (L_Inf ball).
-
-    Only the angle is used for optimization (for now), but the magnitude of the target vector also conveys some
-    information - the certainty of the prediction/eccentricity of the system. Can report this (or a normalized
-    version that accounts for the max length that's different from the axes vs the corners due to anisotropy).
-    """
-    def __init__(self, size_average=True, reduce=True, alpha=1, Z = None):
+    def __init__(self, size_average=True, reduce=True,):
         super(MSErrLoss, self).__init__()
-        self.size_average = size_average
-        self.reduce = reduce
-        self.alpha = alpha
-        self.Z = Z
+        self.mseloss = nn.MSELoss(size_average=size_average, reduce=reduce)
 
     def forward(self, input, target):
-        # Works when target is broadcastable
-        norm = input[:,:2] / torch.sqrt(input[:,0]**2 + input[:,1]**2).unsqueeze(1)
-        loss = ( 0.5 * torch.exp(-input[:,2]) * ( ((norm - target[:,:2])**2).sum(1) ) * self.alpha
-                + ( ( (norm[:,0]**2 - norm[:,1]**2) - (target[:,0]**2 - target[:,1]**2) )**2 + (2*norm[:,0]*norm[:,1] - 2*target[:,0]*target[:,1])**2 ) ) \
-                + 0.5 * input[:,2]  
+        return self.mseloss(input[:,0], target,)
 
-        if self.reduce:
-            if self.size_average:
-                loss = torch.mean(loss)
-            else:
-                loss = torch.sum(loss)
-        if self.Z is not None:
-            return loss + self.Z * self.Z_m(norm)
-        else:
-            return loss
-
-    def Z_m(self, cs):
-        n_modes = 3
-        Z_m = ( ( self.Cnx(1,cs) ) ** 2  + ( self.Snx(1,cs) ) ** 2 ).unsqueeze(0)
-        for k in range(2,n_modes):
-            Z_m = torch.cat((Z_m, ( ( self.Cnx(k,cs) ) ** 2  + ( self.Snx(k,cs) ) ** 2 ).unsqueeze(0)), dim=0)  
-        return torch.max( 2 * torch.cumsum(Z_m,0) / len(cs) - 4 * torch.tensor([m for m in range(1,n_modes)]).cuda() + 4 )
-
-    def Snx(self, n, cs):
-        Sn = 0
-        for k in range(1,n+2,2):
-            Sn += ( (-1)**((k-1)/2) * scipy.special.binom(n,k) * cs[:,0]**(n-k) * cs[:,1]**k ).sum(0)
-        return Sn
-    def Cnx(self, n, cs):
-        Cn = 0
-        for k in range(0,n+2,2):
-            Cn += ( (-1)**(k/2) * scipy.special.binom(n,k) * cs[:,0]**(n-k) * cs[:,1]**k ).sum(0)
-        return Cn
 
 class MSErrLossAll1(nn.Module):
     """Angle between input and target vectors, where input vector is an x,y point on the unit circle corresponding

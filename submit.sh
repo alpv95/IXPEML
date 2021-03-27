@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH --job-name=GPUtest
-#SBATCH --time=180:00
+#SBATCH --time=480:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=30G
@@ -14,5 +14,5 @@ ml viz
 ml py-matplotlib/2.1.2_py36
 ml py-numpy/1.17.2_py36
 
-srun python3 gpu_test.py --data_list spectra/ISP/train/ --save bess3
+srun python3 gpu_test.py --data_list spectra2/true_flat_peak/train/ --save bess
 

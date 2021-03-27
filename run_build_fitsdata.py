@@ -28,7 +28,7 @@ parser.add_argument('input_file', type=str,
 parser.add_argument('out_base', type=str,
                     help='output folder')
 parser.add_argument('--augment', type=int, choices=[1,3], default=3,
-                    help='Number of Track augmentation randomly distributed in dataset. These should always be 3 during inference for >= v1.1')
+                    help='Number of Track augmentation randomly distributed in dataset. These should always be 3 during inference and 1 during training')
 parser.add_argument('--npix', type=int, choices=[30, 50], default=50,
                     help='Number of pixels in square conversions. This should be 50 for >= v1.2')  
 parser.add_argument('--meas', action='store_true',
@@ -39,6 +39,8 @@ parser.add_argument('-pulse','--pulse_cut', action='store_true',
                     help='Whether to cut data about the maximum in the pulse height spectrum as in calibration documents')
 parser.add_argument('--peak_only', action='store_true',
                     help='No low or high Z tail tracks')
+parser.add_argument('--tailvpeak', default=None, type=float,
+                    help='Fraction of Peak tracks to keep.')
 args = parser.parse_args()
 
 
@@ -54,6 +56,7 @@ class builder(object):
     augment = args.augment
     shift = 2
     peak_only = args.peak_only
+    tailvpeak = args.tailvpeak
 
     def __init__(self, total):
         self.total = total
@@ -94,9 +97,9 @@ class builder(object):
         
         for indx, save_file in zip(indxs, self.out_files):
             tracks_cum_save = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in indx]
-            with open(save_file + "tracks_full.pickle", "wb") as f:
+            with open(os.path.join(save_file, "tracks_full.pickle"), "wb") as f:
                 pickle.dump(tracks_cum_save, f)
-            torch.save( {key: value[indx] for (key,value) in self.build_result.items() if key != "tracks"}, save_file + "labels_full.pt" )
+            torch.save( {key: value[indx] for (key,value) in self.build_result.items() if key != "tracks"}, os.path.join(save_file,"labels_full.pt"))
             print("Saved, ", save_file )
         
         return indxs[0]
@@ -138,13 +141,21 @@ class simulated(builder):
             print("Building ", dataset.total, "tracks of", dataset.file)
             fits_data = super().init_build(os.path.join(self.in_file, dataset.file), pulse_cut)
 
-            cut = (fits_data[1]['PE_PHI'] != 0.0) #to remove bump in training data
+            cut = (fits_data[1]['PE_PHI'] != 0.0) #to remove bump in training data from gems and window tracks with no pol info
             #Only take tracks in the peaks
             if self.peak_only:
                 cut *= (fits_data[1]['ABS_Z'] >= 0.95) * (fits_data[1]['ABS_Z'] <= 10.7)
+                #need to flatten
+                #find min bin (at high energy in this case)
+                #cut all bins to this level
+            if self.tailvpeak is not None:
+                cut = (fits_data[1]['ABS_Z'] < 0.95) + (fits_data[1]['ABS_Z'] > 10.7)
+                cut += (fits_data[1]['ABS_Z'] >= 0.95) * (fits_data[1]['ABS_Z'] <= 10.7) * np.random.choice(2, len(fits_data[1]['ABS_Z']), 
+                                                                                                        p=[1-self.tailvpeak, self.tailvpeak],).astype('bool')
 
             print(len(fits_data[0]['DETPHI']),"loaded ok")
-            assert len(fits_data[0]['DETPHI']) >= n_train_final, "Too few tracks, N_final too large."
+            print(len(fits_data[0]['DETPHI'][cut]), "uncut")
+            assert len(fits_data[0]['DETPHI'][cut]) >= n_train_final, "Too few tracks {}, N_final {} too large.".format(len(fits_data[0]['DETPHI'][cut]),n_train_final)
 
             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(fits_data, cut=cut, n_final=n_train_final, augment=self.augment)
 
@@ -209,7 +220,7 @@ class measured(builder):
 
 def main():
     meas_split = (1, 0) #should sum to 1
-    sim_split = (1, 0, 0)
+    sim_split = (0.95, 0.025, 0.025)
 
     if args.meas:
         #get total number of tracks
@@ -222,11 +233,11 @@ def main():
         Builder.build(args.pulse_cut)
         Builder.save(meas_split, tt_random_split)
     else:
-        Ns = [450000, 450000] #0.0566quad, 0.0496peri
-        suffixs = ["exp","pl"]
+        Ns = [args.tot] #0.0566quad, 0.0496peri
+        suffixs = ["true_flat"]
         datasets = []
         for s,N in zip(suffixs, Ns):
-            datasets.append(Dataset('gen4_spec_ISP_' + s + "_recon.fits", N))
+            datasets.append(Dataset('gen4_spec_' + s + "_recon.fits", N))
 
         Builder = simulated(int(sum(Ns)), datasets)
         Builder.build(args.pulse_cut)
