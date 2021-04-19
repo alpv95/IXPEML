@@ -29,7 +29,7 @@ from util.methods import *
 class NetTest(object):
     """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    model_base = os.path.join(base, "data/nn", "")
+    model_base = os.path.join(base, "net_archive", "")
     data_base =  os.path.join(base, "data","")
     save_base =  base 
     plot_base = base
@@ -90,7 +90,7 @@ class NetTest(object):
             angles = y_hats[0,:]
         else:
             print('TAILVPEAK')
-            p_tail = y_hats
+            p_tail = y_hats #* stdE.item() + meanE.item()
             angles = [None]
             errors = [None]
             abs_pts = [None]
@@ -393,7 +393,7 @@ class NetTest(object):
             #Post processing for rotations and reducing repeated moments outputs
             results = post_rotate(results, self.n_nets, aug=3, datatype=self.datatype, losstype=self.losstype)
 
-            if self.losstype != 'tailvpeak':
+            if self.losstype != 'tailvpeak' and self.losstype != 'energy':
                 mu, phi0, mu_err, phi0_err = self.fit_mod(results, method=self.method)
                 mu_w, phi0_w, mu_err_w, phi0_err_w = self.fit_mod(results, method="weighted_MLE")
 
