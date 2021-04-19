@@ -141,16 +141,18 @@ class simulated(builder):
             print("Building ", dataset.total, "tracks of", dataset.file)
             fits_data = super().init_build(os.path.join(self.in_file, dataset.file), pulse_cut)
 
-            cut = (fits_data[1]['PE_PHI'] != 0.0) #to remove bump in training data from gems and window tracks with no pol info
+            #cut = (fits_data[1]['PE_PHI'] != 0.0) #to remove bump in training data from gems and window tracks with no pol info
+            cut = np.ones(len(fits_data[1]['PE_PHI']), dtype=bool)
+
             #Only take tracks in the peaks
             if self.peak_only:
-                cut *= (fits_data[1]['ABS_Z'] >= 0.95) * (fits_data[1]['ABS_Z'] <= 10.7)
+                cut *= (fits_data[1]['ABS_Z'] >= 0.9) * (fits_data[1]['ABS_Z'] <= 10.83)
                 #need to flatten
                 #find min bin (at high energy in this case)
                 #cut all bins to this level
             if self.tailvpeak is not None:
-                cut = (fits_data[1]['ABS_Z'] < 0.95) + (fits_data[1]['ABS_Z'] > 10.7)
-                cut += (fits_data[1]['ABS_Z'] >= 0.95) * (fits_data[1]['ABS_Z'] <= 10.7) * np.random.choice(2, len(fits_data[1]['ABS_Z']), 
+                cut = (fits_data[1]['ABS_Z'] < 0.9) + (fits_data[1]['ABS_Z'] > 10.83)
+                cut += (fits_data[1]['ABS_Z'] >= 0.9) * (fits_data[1]['ABS_Z'] <= 10.83) * np.random.choice(2, len(fits_data[1]['ABS_Z']), 
                                                                                                         p=[1-self.tailvpeak, self.tailvpeak],).astype('bool')
 
             print(len(fits_data[0]['DETPHI']),"loaded ok")
@@ -220,7 +222,7 @@ class measured(builder):
 
 def main():
     meas_split = (1, 0) #should sum to 1
-    sim_split = (0.95, 0.025, 0.025)
+    sim_split = (1, 0, 0)
 
     if args.meas:
         #get total number of tracks
@@ -234,7 +236,7 @@ def main():
         Builder.save(meas_split, tt_random_split)
     else:
         Ns = [args.tot] #0.0566quad, 0.0496peri
-        suffixs = ["true_flat"]
+        suffixs = ["PL2"]
         datasets = []
         for s,N in zip(suffixs, Ns):
             datasets.append(Dataset('gen4_spec_' + s + "_recon.fits", N))

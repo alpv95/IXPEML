@@ -123,10 +123,14 @@ ensembles = { "pol_only": ['final_MSERRALL_PL2_aug1_lowreg_alpha1/models/mom_102
  '733flat1_mserrall2_expectileHuber_alpha0p8/models/mom_1024_161.ptmodel',
  '733flat1_mserrall2_expectileHuber_alpha0p8/models/mom_512_151.ptmodel',],
 
-"tailvpeak": ['733tailvpeak_reg3/models/mom_4096_81.ptmodel',
-      '733tailvpeak_reg/models/RLRP_1024_61.ptmodel',
-      '733tailvpeak3_reg/models/RLRP_2048_36.ptmodel',
-      '733tailvpeak3_reg/models/mom_4096_76.ptmodel',],
+"energy": ['733flat_energy_headonly/models/RLRP_512_41.ptmodel',
+            '733flat_energy_headonly/models/RLRP_1024_131.ptmodel'],
+
+"tailvpeak": ['733flat_tailvpeak_1p0_8e-3/models/RLRP_1024_141.ptmodel',
+      '733flat_tailvpeak_0p5_8e-3/models/RLRP_2048_101.ptmodel',
+      '733flat_tailvpeak_0p5_8e-3/models/RLRP_512_71.ptmodel',
+      '733flat_tailvpeak_0p25_8e-3/models/RLRP_1024_71.ptmodel',
+      '733flat_tailvpeak_0p1_8e-3/models/RLRP_1024_51.ptmodel',],
 
       "bessel_rand_small": ['733bessel3/models/mom_1024_91.ptmodel',
  '733bessel3/models/mom_512_171.ptmodel',

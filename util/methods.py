@@ -488,7 +488,7 @@ def mu100_momE(Emom):
 def error_combine(ang, sigma):
     '''Returns combined statistical and systematic uncertainty weights'''
     weight_epistemic = circular_std(ang, axis=(1,2))
-    return optimal_weight(geo_mean(weightVM(sigma),axis=(1,2)) * weight_epistemic)
+    return geo_mean(weightVM(sigma),axis=(1,2)) * weight_epistemic #optimal weight
 
 def pi_ambiguity_mean(ang, weight):
     '''Mean track angle from ensemble [-pi,pi]'''
@@ -520,9 +520,10 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     xy_abs_pts = np.reshape(xy_abs_pts, [N,-1,2], "C")[0,:,:] 
     mom_abs_pts = np.mean(np.reshape(mom_abs_pts,[N,-1,aug,2],"C"),axis=0)[:,0,:] 
     
-    if losstype == 'tailvpeak':
+    if losstype == 'tailvpeak' or losstype == 'energy':
         p_tail = np.mean(p_tail, axis=(1,2))
-        error_epis = [None]        
+        error_epis = [None]
+        weight = [None]       
     else:
         E_nn = np.mean(E_nn, axis=(1,2)) 
         abs_pts = np.mean(np.reshape(abs_pts,[N,-1,aug,2],"C"),axis=0)[:,0,:]
@@ -557,7 +558,7 @@ def fits_save(results, file, datatype, losstype='mserr1'):
     c8 = fits.Column(name='XY_MOM_ABS', array=xy_abs_pts, format='2E', dim='(2)')
     c14 = fits.Column(name='MOM_ENERGY', array=energies_mom, format='E')
 
-    if losstype == 'tailvpeak':
+    if losstype == 'tailvpeak' or losstype == 'energy':
         c17 = fits.Column(name='P_TAIL', array=p_tail, format='E')
         c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
         c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
