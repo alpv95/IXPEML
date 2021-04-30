@@ -235,11 +235,11 @@ def main():
         Builder.build(args.pulse_cut)
         Builder.save(meas_split, tt_random_split)
     else:
-        Ns = [args.tot] #0.0566quad, 0.0496peri
-        suffixs = ["PL2"]
+        Ns = [args.tot, args.tot] #0.0566quad, 0.0496peri
+        suffixs = ["exp","pl"]
         datasets = []
         for s,N in zip(suffixs, Ns):
-            datasets.append(Dataset('gen4_spec_' + s + "_recon.fits", N))
+            datasets.append(Dataset('gen4_spec_ISP_' + s + "_recon.fits", N))
 
         Builder = simulated(int(sum(Ns)), datasets)
         Builder.build(args.pulse_cut)

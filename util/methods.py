@@ -35,7 +35,7 @@ def geo_mean(iterable, axis):
 
 def circular_mean(angles, weights, axis):
     '''Arg of first moment of Von Mises distribution'''
-    mean = np.array([np.mean(weights*np.cos(2*angles), axis=axis), np.mean(weights*np.sin(2*angles), axis=axis)]) / np.sum(weights,axis=axis)
+    mean = np.array([np.mean(weights*np.cos(2*angles), axis=axis), np.mean(weights*np.sin(2*angles), axis=axis)])
     return 0.5*np.arctan2(mean[1],mean[0])
 
 def circular_std(angles, axis):
@@ -151,16 +151,15 @@ def pol_posterior(pi, phi, Neff, pi0=0, phi0=0, mu100=1):
 
 def CL(Z, dx, dy=1, p=0.68, tol=0.005):
     '''
-    Gets central Confidence level for contour plot for 2d or 1d posterior.
-    Z_norm is the 2d or 1d grid of normalized posterior values. For 1d posterior keep dy=1.
-    Returns posterior contour level.
+    Gets Confidence level for contour plot for 2d posterior.
+    Z_norm is the 2d grid of normalized posterior values
     '''
     integral = np.sum(Z*dx*dy)
     if not math.isclose(integral,1):
         print("input posterior not normalized")
         Z = Z / integral
     x = 0
-    max_iter = 200
+    max_iter = 1000
     i = 0
     const = np.max(Z)/max_iter
     while np.abs(np.sum(Z[Z >= np.max(Z)-x]*dx*dy) - p) > tol and i < max_iter:
@@ -169,6 +168,9 @@ def CL(Z, dx, dy=1, p=0.68, tol=0.005):
     if i >= max_iter:
         print('Max iterations reached, need to lower tolerance.')
         return 
+    if dy == 1: #1d posterior
+        idxs = np.where(Z >= np.max(Z)-x)[0]
+        return np.max(Z) - x, min(idxs), max(idxs)
     return np.max(Z) - x
 
 def upper_CL(Z, x, p=0.68, tol=0.005):
@@ -456,39 +458,44 @@ def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom, num_pixels=50):
     '''Converts abs points from local image coordinates to global grid coords'''
     return num_pixels*(abs_pts_sq - mom_abs_pts_sq) * np.array([PIXEL_X_SPACE,PIXEL_Y_SPACE]) + xy_abs_mom
 
-def optimal_weight(w, i=0):
-    ''' Weight to mu100 and optimal weight conversion. 
-    Recursive function that brings mu_100 to a linear relationship with weight.'''
-    ps = [np.array([ 1.21410576e+01, -4.96954162e+01,  8.14789225e+01, -6.83102172e+01,
-         3.11257214e+01, -7.62197920e+00,  1.88190338e+00,  7.76891394e-06]),
-         np.array([ 7.51281699e+00, -2.67999731e+01,  3.77747179e+01, -2.65971436e+01,
-                 9.68972542e+00, -1.68433976e+00,  1.10419005e+00,  6.09786434e-06]),
-         np.array([ 3.98795853e-01, -1.45390707e+00,  2.10826041e+00, -1.54173524e+00,
-                 5.91740029e-01, -1.10802105e-01,  1.00764230e+00,  5.90689355e-06]),
-         np.array([ 3.55045046e-02, -1.27783735e-01,  1.82501225e-01, -1.30955776e-01,
-                 4.89526689e-02, -8.75929102e-03,  1.00053458e+00,  5.89051327e-06]),
-         np.array([-5.86490116e-04,  2.57522322e-03, -4.63776415e-03,  4.40756118e-03,
-                -2.36393780e-03,  7.05504066e-04,  9.99894087e-01,  5.88811107e-06]),
-         np.array([-3.30689955e-03,  1.25638640e-02, -1.92315072e-02,  1.51636514e-02,
-                -6.52385298e-03,  1.48909836e-03,  9.99839831e-01,  5.88693882e-06]),
-         np.array([-3.69052703e-03,  1.39149940e-02, -2.11173500e-02,  1.64838296e-02,
-                -7.00476413e-03,  1.57361045e-03,  9.99834393e-01,  5.88587542e-06]),
-         np.array([-3.65475003e-03,  1.37904198e-02, -2.09500759e-02,  1.63795325e-02,
-                -6.97703089e-03,  1.57186220e-03,  9.99834229e-01,  5.88481068e-06])]
-    if i == len(ps):
-        return w
-    return optimal_weight(np.dot(ps[i], np.array([w**7,w**6,w**5,w**4,w**3,w**2,w,1])),i+1)
+# def optimal_weight(w, i=0):
+#     ''' Weight to mu100 and optimal weight conversion. 
+#     Recursive function that brings mu_100 to a linear relationship with weight.'''
+#     ps = [np.array([ 1.21410576e+01, -4.96954162e+01,  8.14789225e+01, -6.83102172e+01,
+#          3.11257214e+01, -7.62197920e+00,  1.88190338e+00,  7.76891394e-06]),
+#          np.array([ 7.51281699e+00, -2.67999731e+01,  3.77747179e+01, -2.65971436e+01,
+#                  9.68972542e+00, -1.68433976e+00,  1.10419005e+00,  6.09786434e-06]),
+#          np.array([ 3.98795853e-01, -1.45390707e+00,  2.10826041e+00, -1.54173524e+00,
+#                  5.91740029e-01, -1.10802105e-01,  1.00764230e+00,  5.90689355e-06]),
+#          np.array([ 3.55045046e-02, -1.27783735e-01,  1.82501225e-01, -1.30955776e-01,
+#                  4.89526689e-02, -8.75929102e-03,  1.00053458e+00,  5.89051327e-06]),
+#          np.array([-5.86490116e-04,  2.57522322e-03, -4.63776415e-03,  4.40756118e-03,
+#                 -2.36393780e-03,  7.05504066e-04,  9.99894087e-01,  5.88811107e-06]),
+#          np.array([-3.30689955e-03,  1.25638640e-02, -1.92315072e-02,  1.51636514e-02,
+#                 -6.52385298e-03,  1.48909836e-03,  9.99839831e-01,  5.88693882e-06]),
+#          np.array([-3.69052703e-03,  1.39149940e-02, -2.11173500e-02,  1.64838296e-02,
+#                 -7.00476413e-03,  1.57361045e-03,  9.99834393e-01,  5.88587542e-06]),
+#          np.array([-3.65475003e-03,  1.37904198e-02, -2.09500759e-02,  1.63795325e-02,
+#                 -6.97703089e-03,  1.57186220e-03,  9.99834229e-01,  5.88481068e-06])]
+#     if i == len(ps):
+#         return w
+#     return optimal_weight(np.dot(ps[i], np.array([w**7,w**6,w**5,w**4,w**3,w**2,w,1])),i+1)
 
-def mu100_momE(Emom):
-    ''' mom_E to mu100 conversion for unweighted moment analysis'''
-    pE = np.array([-7.54382639e-06,  3.52854245e-04, -6.68021596e-03,  6.54785511e-02,
-       -3.52446019e-01,  1.00884597e+00, -1.25207683e+00,  5.66052833e-01])
-    return np.dot(pE,np.array([Emom**7,Emom**6,Emom**5,Emom**4,Emom**3,Emom**2,Emom,1]))
+# def mu100_momE(Emom):
+#     ''' mom_E to mu100 conversion for unweighted moment analysis'''
+#     pE = np.array([-7.54382639e-06,  3.52854245e-04, -6.68021596e-03,  6.54785511e-02,
+#        -3.52446019e-01,  1.00884597e+00, -1.25207683e+00,  5.66052833e-01])
+#     return np.dot(pE,np.array([Emom**7,Emom**6,Emom**5,Emom**4,Emom**3,Emom**2,Emom,1]))
 
 def error_combine(ang, sigma):
     '''Returns combined statistical and systematic uncertainty weights'''
     weight_epistemic = circular_std(ang, axis=(1,2))
-    return geo_mean(weightVM(sigma),axis=(1,2)) * weight_epistemic #optimal weight
+    return geo_mean(weightVM(sigma),axis=(1,2)), weight_epistemic #optimal weight
+
+def error_combine_gauss(ang, sigma):
+    '''Returns combined statistical and systematic uncertainty weights'''
+    weight_epistemic = circular_std(ang, axis=(1,2))
+    return 1 / np.mean(sigma**2,axis=(1,2)), weight_epistemic #optimal weight
 
 def pi_ambiguity_mean(ang, weight):
     '''Mean track angle from ensemble [-pi,pi]'''
@@ -522,31 +529,31 @@ def post_rotate(results_tuple, N, aug=3, datatype="sim", losstype='mserr1'):
     
     if losstype == 'tailvpeak' or losstype == 'energy':
         p_tail = np.mean(p_tail, axis=(1,2))
-        error_epis = [None]
-        weight = [None]       
+        weight = [None]
+        weight_epis = [None]       
     else:
         E_nn = np.mean(E_nn, axis=(1,2)) 
         abs_pts = np.mean(np.reshape(abs_pts,[N,-1,aug,2],"C"),axis=0)[:,0,:]
         if aug == 3:
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
-        weight = error_combine(ang, error)
-        ang = pi_ambiguity_mean(ang, 1/error**2)
+        weight, weight_epis = error_combine(ang, error)
+        ang = pi_ambiguity_mean(ang, weight=1)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[N,-1,aug,2],"C"),axis=0)[:,0,:]
 
     if datatype == "meas":
-        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], weight, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
+        A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], weight, weight_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
              zs, trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     else:
-        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], weight, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
+        A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], weight, weight_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
             zs[:,0,0], trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
     return A
 
 def fits_save(results, file, datatype, losstype='mserr1'):
     '''Organizes final fits file save'''
-    angles, angles_mom, angles_sim, moms, weights, abs_pts, mom_abs_pts, abs_pts_sim, \
+    angles, angles_mom, angles_sim, moms, weights, weights_epis, abs_pts, mom_abs_pts, abs_pts_sim, \
     energies, energies_sim, energies_mom, zs, trgs, flags, p_tail, xy_abs_pts = results
 
     hdu = fits.PrimaryHDU()
@@ -569,6 +576,7 @@ def fits_save(results, file, datatype, losstype='mserr1'):
     else:
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')      
         c5 = fits.Column(name='NN_WEIGHT', array=weights, format='E')
+        cEpis = fits.Column(name='NN_WEIGHT_EPIS', array=weights_epis, format='E')
         c6 = fits.Column(name='NN_ABS', array=abs_pts, format='2E', dim='(2)')
         c1 = fits.Column(name='NN_PHI', array=angles, format='E')
         c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
@@ -578,11 +586,11 @@ def fits_save(results, file, datatype, losstype='mserr1'):
             c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(3)')
             c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
             c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14])
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, cEpis])
         else:
             c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
             c18 = fits.Column(name='FLAG', array=flags, format='J',)
-            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, c18])
+            table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, c18, cEpis])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits', overwrite=True)

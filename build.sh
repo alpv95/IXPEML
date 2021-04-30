@@ -21,7 +21,7 @@ ml py-matplotlib/2.1.2_py36
 
 #srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_unpol /home/users/alpv95/khome/tracksml/data/expanded/newpaper_unpol --Erange 1.0 9.0 --fraction 0.0361 --pl 0 --aeff
 #srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/gen4_pol3 /home/users/alpv95/khome/tracksml/data/expanded/pol3 --Erange 1.0 9.0 --fraction 0.0091 --pl 0
-srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/spectra_test /home/users/alpv95/khome/tracksml/data/spectra_test/PL2 --tot 1500000
+srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/spectra2 /home/users/alpv95/khome/tracksml/data/spectra2/ISP2 --tot 500000
 
 
 

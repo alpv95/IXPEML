@@ -17,7 +17,9 @@ from scipy.special import expit
 from nn import cnn_loss
 from util import loss
 
-
+def softmax(x, axis):
+    """Compute softmax values for each sets of scores in x."""
+    return np.exp(x) / np.sum(np.exp(x), axis=axis)
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -84,6 +86,8 @@ class ResNet(nn.Module):
             output_num = 1
         elif outputtype == '2pos' or outputtype == 'abs_pts':
             output_num = 2
+        elif outputtype == '3pos':
+            output_num = 3
         elif outputtype == '7pos2err':
             output_num = 9
         elif outputtype == '2pos1err':
@@ -237,6 +241,11 @@ class TrackAngleRegressor:
             val_criterion = cnn_loss.BinaryLoss(size_average=False)
             label_number = 1
             hparams['outputtype'] = '1ang'
+        elif losstype == 'tailvpeak2':
+            criterion = nn.CrossEntropyLoss()
+            val_criterion = nn.CrossEntropyLoss(size_average=False)
+            label_number = 1
+            hparams['outputtype'] = '3pos'
         elif losstype == 'cos':
             criterion = cnn_loss.CosineLoss(alpha=hparams['alpha_loss'])
             val_criterion = cnn_loss.CosineLoss(size_average=False)
@@ -366,10 +375,12 @@ class TrackAngleRegressor:
                             val_acc += np.sum((np.argmax(y_hat_batch.data.cpu().numpy(), axis=1) == y_batch.data.cpu().numpy())*1)
                         elif losstype == 'tailvpeak':
                             val_acc += np.sum((np.where(np.squeeze(expit(y_hat_batch.data.cpu().numpy())) > 0.5, 1, 0) == y_batch.data.cpu().numpy())*1)
+                        elif losstype == 'tailvpeak2':
+                            val_acc += np.sum(np.argmax(y_hat_batch.data.cpu().numpy(),axis=-1) == y_batch.data.cpu().numpy() )
                val_loss /= len(val_loader.dataset) #(y_batch.shape[0] / batch_size)
                val_losses.append(val_loss)
                val_steps.append(epoch * math.ceil(n_samples / batch_size) )
-               if losstype == 'CE' or losstype == 'tailvpeak':
+               if losstype == 'CE' or losstype == 'tailvpeak' or losstype == 'tailvpeak2':
                   val_acc /= len(val_loader.dataset)
                   print('\n Validation Set Accuracy: {:.4f}\n'.format(val_acc))
                print('\nValidation set - Average loss: {:.4f}\n'.format(val_loss))
@@ -544,6 +555,10 @@ class TrackAngleRegressor:
             # Calculate angles
             y_hats = y_hats.reshape(-1,2)
             y_hat_angles = np.arctan2(y_hats[:,1], y_hats[:,0])
+
+        elif output_type == '3pos':
+            #Apply sigmoid to tailvpeak outputs
+            y_hat_angles = softmax(y_hats, axis=-1)
 
         elif output_type == '2pos1err':#dont worry about error for now
             # Calculate angles
