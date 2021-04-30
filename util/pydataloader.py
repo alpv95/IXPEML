@@ -53,6 +53,9 @@ class H5Dataset(Dataset):
                 self.Y = self.energy.float()
             elif (losstype == "tailvpeak"):
                 self.Y = torch.where(torch.lt(self.zs, 0.9) + torch.gt(self.zs, 10.83), torch.tensor(1), torch.tensor(0)).float()
+            elif (losstype == "tailvpeak2"):
+                self.Y = torch.where(torch.lt(self.zs, 0.9) + torch.gt(self.zs, 10.83), torch.tensor(1), torch.tensor(0))
+                self.Y[torch.gt(self.zs, 10.83)] = torch.tensor(2, dtype=torch.long)
         else:
             self.trgs = data_all["trg_id"]
             self.flags = data_all["flag"]

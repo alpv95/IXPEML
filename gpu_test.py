@@ -8,7 +8,7 @@ import argparse
 from util.definitions import ensembles
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--ensemble', type=str, choices=["bessel_rand","bessel_rand_small","heads_only","tailvpeak","energy"], default="bessel_rand",
+parser.add_argument('--ensemble', type=str, choices=["bessel_rand","bessel_rand_small","heads_only","tailvpeak","energy", "flat_weight"], default="bessel_rand",
                     help='Which network ensemble to use: Ensemble prediction or single prediction')
 parser.add_argument('--plot', action='store_true',
                     help='Whether to plot histograms and modulation curves')

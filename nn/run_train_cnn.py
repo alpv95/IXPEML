@@ -26,7 +26,7 @@ def main():
     data_dir = os.path.realpath('data/')
     data_file = data_dir + "/expanded/true_flat_1p0/"
 
-    job = Spec(name='733flat_tailvpeak_1p0_8e-3', data_file=data_file, loss='tailvpeak', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='733flat_tailvpeak2_1p0_8e-3', data_file=data_file, loss='tailvpeak2', alpha_loss=0.8, Z=None, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
     
     # Set dirs

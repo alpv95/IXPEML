@@ -1,11 +1,11 @@
 #!/bin/bash
 #
 #SBATCH --job-name=GPUtest
-#SBATCH --time=200:00
+#SBATCH --time=150:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=20G
-#SBATCH --partition=gpu
+#SBATCH --partition=owners
 #SBATCH --gres gpu:2
 ####SBATCH -C GPU_SKU:TESLA_P100_PCIE
 #SBATCH -C GPU_MEM:16GB
@@ -20,4 +20,4 @@ ml cuda/11.2.0
 ml cudnn/7.6.5
 
 nvidia-smi
-srun python3 gpu_test.py --data_list spectra_test/PL2/train/ --save tailvpeak --ensemble tailvpeak
+srun python3 gpu_test.py --data_list spectra2/ISP2/train/ --save energy3 --ensemble energy
