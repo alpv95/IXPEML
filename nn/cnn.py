@@ -4,9 +4,6 @@ import math
 import random
 import inspect
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +12,6 @@ import torch.nn.init as weight_init
 from torch.autograd import Variable
 from scipy.special import expit
 from nn import cnn_loss
-from util import loss
 
 def softmax(x, axis):
     """Compute softmax values for each sets of scores in x."""
@@ -422,36 +418,6 @@ class TrackAngleRegressor:
             else:
                 scheduler.step() #checking for lr decay
             
-
-        # Train
-        '''
-        if verbose > 0:
-            print('Training for {} steps'.format(n_steps))
-        if track_stats:
-            steps = []
-            losses = []  # Only displays the batch's results
-        for i_step in range(1, n_steps + 1):
-            optimizer.zero_grad()
-
-            X_batch, y_batch = draw_batch()
-
-            y_hat_batch = self.net(X_batch)
-            loss = criterion(y_hat_batch, y_batch)
-
-            # Show progress - single batch loss
-            if verbose > 0 or track_stats:
-                if i_step % 100 == 0:
-                    print(loss, loss.cpu(), loss.cpu().data.numpy())
-                    i_loss = loss.cpu().data.numpy() #[0]
-                    if verbose > 0:
-                        print('Step {}: loss {:.4f}'.format(i_step, i_loss))
-                    if track_stats:
-                        steps.append(i_step)
-                        losses.append(i_loss)
-
-            loss.backward()
-            optimizer.step()
-        '''
         if verbose > 0:
             print('done training.')
 
@@ -474,9 +440,9 @@ class TrackAngleRegressor:
         """Run inference on provided data and compare to expected results. Supports a variety of outputs."""
         return self._eval(data_loader, y_exists, use_gpu=use_gpu, output_all=output_all, output_vals=output_vals)
 
-    def predict(self, data_loader, use_gpu=True, bayes=False, one_batch=False, output_vals=()):
+    def predict(self, data_loader, use_gpu=True, one_batch=False, output_vals=()):
         """Run inference on provided data, outputting just the predicted angles"""
-        metrics = self._eval(data_loader, y_exists=False, use_gpu=use_gpu, bayes=bayes, one_batch=False, output_all=True, output_vals=output_vals)
+        metrics = self._eval(data_loader, y_exists=False, use_gpu=use_gpu, one_batch=False, output_all=True, output_vals=output_vals)
         return metrics['y_hat_angles']
     
     def save_checkpoint(self, epoch):
@@ -500,7 +466,7 @@ class TrackAngleRegressor:
         if type(m) == nn.Dropout:
             m.train()
 
-    def _eval(self, data_loader, y_exists=True, use_gpu=True, bayes=False, one_batch=False, output_all=False, output_vals=()):
+    def _eval(self, data_loader, y_exists=True, use_gpu=True, one_batch=False, output_all=False, output_vals=()):
         """Evaluate performance metrics. Splits into batches to evaluate. Optionally outputs additional metrics.
 
         Args:

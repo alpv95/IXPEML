@@ -2,8 +2,6 @@
 torch.utils.data.Dataset class that allows for fast reading and shuffling of data for training and validation
 Much more efficient than passing around huge numpy arrays
 '''
-import math
-import h5py
 import numpy as np
 import os
 import torch
@@ -95,15 +93,6 @@ class H5DatasetEval(H5Dataset):
         sample = track.float()
         return sample
 
-class ToTensor(object):
-    """Convert ndarrays in sample to Tensors."""
-
-    def __call__(self, sample):
-        track_image, angle = sample
-
-        return (torch.from_numpy(track_image),
-                torch.from_numpy(angle))
-
 class ZNormalize(object):
     """Normalizes data to mean and std of training set"""
 	
@@ -115,16 +104,4 @@ class ZNormalize(object):
         track_image, angle = sample
         track_image -= self.mean #centre data on mean per pixel
         return ( torch.where(self.std!=0, track_image / self.std, track_image), #make sure we dont divide by 0 if pixel std = 0
-                  angle )
-
-class SelfNormalize(object):
-    """Normalizes data to mean and std of training set"""
-
-    def __init__(self,):
-        pass
-        
-    def __call__(self, sample):
-        track_image, angle = sample
-        maxx = torch.max(track_image)
-        return ( track_image / maxx,
                   angle )

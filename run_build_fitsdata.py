@@ -4,23 +4,17 @@ For both real (measured) and simulated tracks.
 '''
 
 import os
-import h5py
 import numpy as np
 from collections import namedtuple
-from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
-from formats.sparse_hex import SparseHexTracks, SparseHexSimTracks
-from prep.augment_tracks import expand_tracks
 from prep.convert_hex_to_square_tracks import hex2square
 from util.split_data import tvt_random_split, tt_random_split
 import torch
 from scipy.stats import norm
 from astropy.io import fits
 import argparse
-from astropy import stats
 import pickle
 from util.methods import *
-from astropy.table import hstack,Table
 
 parser = argparse.ArgumentParser()
 parser.add_argument('input_file', type=str,
