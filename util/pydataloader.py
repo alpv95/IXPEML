@@ -55,7 +55,7 @@ class H5Dataset(Dataset):
         else:
             self.trgs = data_all["trg_id"]
             self.flags = data_all["flag"]
-            self.Y = None #torch.zeros(len(self.tracks_cube), 3, 5).float()
+            self.Y = None
     
     def __getitem__(self, index):
         sparse = self.tracks_cube[index]
