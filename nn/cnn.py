@@ -94,6 +94,8 @@ class ResNet(nn.Module):
             output_num = 3
         elif outputtype == '5pos1err':
             output_num = 6
+        elif outputtype == '5pos4err':
+            output_num = 9
         elif outputtype == 'CE':
             output_num = 6
 
@@ -221,11 +223,16 @@ class TrackAngleRegressor:
         # Set loss function and make required changes
         if losstype == 'mserrall2':
             criterion = cnn_loss.MSErrLossAll2(alpha=hparams['alpha_loss'], 
-                            Z=hparams['Z'], lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
+                            lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
             val_criterion = cnn_loss.MSErrLossAll2(size_average=False, alpha=hparams['alpha_loss'], 
-                            Z=hparams['Z'],lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
+                            lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
             label_number = 5
             hparams['outputtype'] = '5pos1err'
+        elif losstype == 'mserrall3':
+            criterion = cnn_loss.MSErrLossAll3()
+            val_criterion = cnn_loss.MSErrLossAll3(size_average=False,)
+            label_number = 5
+            hparams['outputtype'] = '5pos4err'
         elif losstype == 'mserr':
             criterion = cnn_loss.MSErrLoss(alpha=hparams['alpha_loss'], Z=hparams['Z'])
             val_criterion = cnn_loss.MSErrLoss(size_average=False, alpha=hparams['alpha_loss'], Z=hparams['Z'])
@@ -560,13 +567,11 @@ class TrackAngleRegressor:
             #Apply sigmoid to tailvpeak outputs
             y_hat_angles = softmax(y_hats, axis=-1)
 
-        elif output_type == '2pos1err':#dont worry about error for now
-            # Calculate angles
+        elif output_type == '2pos1err':
             y_hats = y_hats.reshape(-1,3)
             y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])) ))
 
-        elif output_type == '7pos2err':#dont worry about error for now
-            # Calculate angles
+        elif output_type == '7pos2err':
             y_hats = y_hats.reshape(-1,9)
             y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), np.arctan2(y_hats[:,4], y_hats[:,3]), np.sqrt(np.exp(y_hats[:,5])), y_hats[:,6],
                                          y_hats[:,7], y_hats[:,8] ))
@@ -575,11 +580,15 @@ class TrackAngleRegressor:
              y_hats = y_hats.reshape(-1,2)
              y_hat_angles = None
 
-        elif output_type == '5pos1err':#dont worry about error for now
-            # Calculate angles
+        elif output_type == '5pos1err':
             y_hats = y_hats.reshape(-1,6)
             y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), y_hats[:,3],
                                         y_hats[:,4], y_hats[:,5]))
+
+        elif output_type == '5pos4err':#dont worry about error for now
+            y_hats = y_hats.reshape(-1,9)
+            y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), y_hats[:,3],
+                                        y_hats[:,4], y_hats[:,5], y_hats[:,6], y_hats[:,7], y_hats[:,8]))
 
         elif output_type == 'abs_pts':
              y_hats = y_hats.reshape(-1,2)
@@ -590,7 +599,6 @@ class TrackAngleRegressor:
              y_hat_angles = np.argmax(y_hats, axis=1)
 
         metrics = {
-            # 'd': d,  # angle distance - can use this to calculate mean abs loss in post-processing if desired
             'y_hat': y_hats,  # the actual predictions - could be a vec or a 2 col mat
             'y_hat_angles': y_hat_angles  # predicted angles
         }

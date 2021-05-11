@@ -232,18 +232,22 @@ def Aeff(E):
 
     return np.interp(E, area[:,0],area[:,1]) * np.interp(E, eff1[:,0],eff1[:,1])
 
-def exposure(spec, d, F):
+def exposure(spec, d, F, INrange=(2,8), OUTrange=(1,10)):
     """
     Calculates total number of photons expected when observing a source
     with count spectrum spec for d days, with integrated flux density F erg/cm^2/s 
     between 1-9 keV.
     """
-    
-    spec_int, _ = integrate.quad(lambda e: spec(e)*e, 1, 9, limit=300)
+    assert isinstance(INrange, tuple)
+    assert isinstance(OUTrange, tuple)
+
+    spec_int, _ = integrate.quad(lambda e: spec(e)*e, INrange[0], INrange[1], limit=300)
     A = (F * 6.24151e+8) / spec_int
-    N_obs = np.sum((d*24*60*60) * Aeff(np.linspace(1,9,801))
-                   * A * spec(np.linspace(1,9,801)) 
-                   * 0.01 )
+    x = np.linspace(OUTrange[0],OUTrange[1],801)
+    dx = x[1] - x[0]
+    N_obs = np.sum((d*24*60*60) * Aeff(x)
+                   * A * spec(x) 
+                   * dx)
     return N_obs
 
 def paper_spec(E):
@@ -457,35 +461,6 @@ def triple_angle_rotate(ang):
 def square2hex_abs(abs_pts_sq, mom_abs_pts_sq, xy_abs_mom, num_pixels=50):
     '''Converts abs points from local image coordinates to global grid coords'''
     return num_pixels*(abs_pts_sq - mom_abs_pts_sq) * np.array([PIXEL_X_SPACE,PIXEL_Y_SPACE]) + xy_abs_mom
-
-# def optimal_weight(w, i=0):
-#     ''' Weight to mu100 and optimal weight conversion. 
-#     Recursive function that brings mu_100 to a linear relationship with weight.'''
-#     ps = [np.array([ 1.21410576e+01, -4.96954162e+01,  8.14789225e+01, -6.83102172e+01,
-#          3.11257214e+01, -7.62197920e+00,  1.88190338e+00,  7.76891394e-06]),
-#          np.array([ 7.51281699e+00, -2.67999731e+01,  3.77747179e+01, -2.65971436e+01,
-#                  9.68972542e+00, -1.68433976e+00,  1.10419005e+00,  6.09786434e-06]),
-#          np.array([ 3.98795853e-01, -1.45390707e+00,  2.10826041e+00, -1.54173524e+00,
-#                  5.91740029e-01, -1.10802105e-01,  1.00764230e+00,  5.90689355e-06]),
-#          np.array([ 3.55045046e-02, -1.27783735e-01,  1.82501225e-01, -1.30955776e-01,
-#                  4.89526689e-02, -8.75929102e-03,  1.00053458e+00,  5.89051327e-06]),
-#          np.array([-5.86490116e-04,  2.57522322e-03, -4.63776415e-03,  4.40756118e-03,
-#                 -2.36393780e-03,  7.05504066e-04,  9.99894087e-01,  5.88811107e-06]),
-#          np.array([-3.30689955e-03,  1.25638640e-02, -1.92315072e-02,  1.51636514e-02,
-#                 -6.52385298e-03,  1.48909836e-03,  9.99839831e-01,  5.88693882e-06]),
-#          np.array([-3.69052703e-03,  1.39149940e-02, -2.11173500e-02,  1.64838296e-02,
-#                 -7.00476413e-03,  1.57361045e-03,  9.99834393e-01,  5.88587542e-06]),
-#          np.array([-3.65475003e-03,  1.37904198e-02, -2.09500759e-02,  1.63795325e-02,
-#                 -6.97703089e-03,  1.57186220e-03,  9.99834229e-01,  5.88481068e-06])]
-#     if i == len(ps):
-#         return w
-#     return optimal_weight(np.dot(ps[i], np.array([w**7,w**6,w**5,w**4,w**3,w**2,w,1])),i+1)
-
-# def mu100_momE(Emom):
-#     ''' mom_E to mu100 conversion for unweighted moment analysis'''
-#     pE = np.array([-7.54382639e-06,  3.52854245e-04, -6.68021596e-03,  6.54785511e-02,
-#        -3.52446019e-01,  1.00884597e+00, -1.25207683e+00,  5.66052833e-01])
-#     return np.dot(pE,np.array([Emom**7,Emom**6,Emom**5,Emom**4,Emom**3,Emom**2,Emom,1]))
 
 def error_combine(ang, sigma):
     '''Returns combined statistical and systematic uncertainty weights'''
