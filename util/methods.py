@@ -211,6 +211,15 @@ def ellipticity_cut(angles, moms, keep_fraction):
                 break
         return mom_cut
 
+def MLError(self, angles, mu_hat, phi_hat):
+    denom = (1 + mu_hat*np.cos(2*(angles - phi_hat)))**2
+    I00 = np.sum(np.cos(2*(angles - phi_hat))**2 / denom)
+    I01 = np.sum(2*np.sin(2*(angles - phi_hat)) / denom)
+    I11 = np.sum(4*mu_hat*(mu_hat + np.cos(2*(angles - phi_hat)) ) / denom)
+    I = np.array([[I00,I01],[I01,I11]])
+    I_1 = np.linalg.inv(I)
+    return np.sqrt(I_1[0,0]), np.sqrt(I_1[1,1]), I_1[0,1]/np.sqrt(I_1[0,0]*I_1[1,1])
+
 def minimiseMDP(angles, weights):
     def mdp(lambd):
         mu, _, Neff = weighted_stokes(np.ndarray.flatten(angles), weights, lambd)

@@ -11,10 +11,9 @@ import numpy as np
 sys.path.insert(0, '/home/groups/rwr/alpv95/tracksml')
 from util import h5pack
 from util.submit_cluster import submit as submit_cluster
-from util.pydataloader import H5Dataset, ToTensor, ZNormalize, SelfNormalize
+from util.pydataloader import H5Dataset, ZNormalize
 from collections import namedtuple
 from nn.cnn import TrackAngleRegressor
-from formats.dense_square import DenseSquareSimTracks
 from torchvision import transforms
 
 

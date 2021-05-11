@@ -5,14 +5,7 @@ import numpy as np
 import os
 import torch
 import copy as cp
-import multiprocessing
 import matplotlib.pyplot as plt
-from scipy.interpolate import griddata
-from sklearn.metrics.pairwise import pairwise_distances
-from formats.dense_square import DenseSquareTracks, DenseSquareSimTracks
-import multiprocess as mp
-import h5py
-import pdb
 
 XPOL_COL_PITCH = 0.050
 XPOL_COL_OFFSET = 7.4625
