@@ -35,8 +35,6 @@ parser.add_argument('--meas', action='store_true',
                     help='Whether data is real or simulated, if squaring measured data this argument is required')
 parser.add_argument('--tot', type=int, default=None,
                     help='The total number of tracks to convert to square')
-parser.add_argument('-pulse','--pulse_cut', action='store_true',
-                    help='Whether to cut data about the maximum in the pulse height spectrum as in calibration documents')
 parser.add_argument('--peak_only', action='store_true',
                     help='No low or high Z tail tracks')
 parser.add_argument('--tailvpeak', default=None, type=float,
@@ -66,7 +64,7 @@ class builder(object):
                              "mom_abs": torch.zeros( (self.total, self.augment, self.shift, 2) ), "xy_abs": torch.zeros( (self.total, 2) ), 
                              "mom_energy": torch.zeros( self.total)}
 
-    def init_build(self, input_file, pulse_cut):
+    def init_build(self, input_file,):
         try:
             with fits.open(input_file.replace("_recon","_mc"), memmap=True) as hdu:
                 data_mc = hdu['MONTE_CARLO'].data
@@ -80,11 +78,6 @@ class builder(object):
                 data = hdu['EVENTS'].data
             assert 'DETPHI' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
 
-        #Cuts for calibration, not useful in reality
-        # cut = np.ones_like(data['TRG_ID'], dtype=bool)
-        # if pulse_cut:
-        #     (mu,sigma) = norm.fit(data['PI'])
-        #     cut *= (data['PI'] > mu - 3*sigma) * (data['PI'] < mu + 3*sigma)
         return data
 
     def save(self, split, split_func):
@@ -134,30 +127,26 @@ class simulated(builder):
                                     ("abs", torch.zeros( (self.total, self.augment, self.shift, 2) )),
                                      ("energy", torch.zeros( self.total, self.augment )), ("z", torch.zeros( self.total ))])
 
-    def build(self, pulse_cut):
+    def build(self,):
         cur_idx = 0
         for dataset in self.datasets:
             n_train_final = dataset.total
             print("Building ", dataset.total, "tracks of", dataset.file)
-            fits_data = super().init_build(os.path.join(self.in_file, dataset.file), pulse_cut)
+            fits_data = super().init_build(os.path.join(self.in_file, dataset.file),)
 
-            #cut = (fits_data[1]['PE_PHI'] != 0.0) #to remove bump in training data from gems and window tracks with no pol info
             cut = np.ones(len(fits_data[1]['PE_PHI']), dtype=bool)
 
             #Only take tracks in the peaks
             if self.peak_only:
-                cut *= (fits_data[1]['ABS_Z'] >= 0.9) * (fits_data[1]['ABS_Z'] <= 10.83)
-                #need to flatten
-                #find min bin (at high energy in this case)
-                #cut all bins to this level
+                cut *= (fits_data[1]['ABS_Z'] >= 0.835) * (fits_data[1]['ABS_Z'] <= 10.83)
             if self.tailvpeak is not None:
-                cut = (fits_data[1]['ABS_Z'] < 0.9) + (fits_data[1]['ABS_Z'] > 10.83)
-                cut += (fits_data[1]['ABS_Z'] >= 0.9) * (fits_data[1]['ABS_Z'] <= 10.83) * np.random.choice(2, len(fits_data[1]['ABS_Z']), 
+                cut = (fits_data[1]['ABS_Z'] < 0.835) + (fits_data[1]['ABS_Z'] > 10.83)
+                cut += (fits_data[1]['ABS_Z'] >= 0.835) * (fits_data[1]['ABS_Z'] <= 10.83) * np.random.choice(2, len(fits_data[1]['ABS_Z']), 
                                                                                                         p=[1-self.tailvpeak, self.tailvpeak],).astype('bool')
 
             print(len(fits_data[0]['DETPHI']),"loaded ok")
             print(len(fits_data[0]['DETPHI'][cut]), "uncut")
-            assert len(fits_data[0]['DETPHI'][cut]) >= n_train_final, "Too few tracks {}, N_final {} too large.".format(len(fits_data[0]['DETPHI'][cut]),n_train_final)
+            assert len(fits_data[0]['DETPHI'][cut]) >= n_train_final, "Too few tracks {}, N_final {} too large.".format(len(fits_data[0]['DETPHI'][cut]), n_train_final)
 
             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(fits_data, cut=cut, n_final=n_train_final, augment=self.augment)
 
@@ -201,11 +190,10 @@ class measured(builder):
         self.build_result.update([("trg_id", torch.zeros( self.total, dtype=torch.int32 ))])
         self.build_result.update([("flag", torch.zeros( self.total, dtype=torch.int32 ))])  
 
-    def build(self, pulse_cut):
-        fits_data = super().init_build(self.in_file, pulse_cut)
+    def build(self,):
+        fits_data = super().init_build(self.in_file,)
 
         print(len(fits_data['DETPHI']),"loaded ok")
-        # fits_data = fits_data[:self.total]
 
         tracks, mom_phis, mom_abs_pts, flags = hex2square(fits_data, augment=self.augment)
 
@@ -222,7 +210,7 @@ class measured(builder):
 
 def main():
     meas_split = (1, 0) #should sum to 1
-    sim_split = (1, 0, 0)
+    sim_split = (0.95, 0.025, 0.025)
 
     if args.meas:
         #get total number of tracks
@@ -232,17 +220,17 @@ def main():
         print("Total number of unique tracks = {}\n".format(args.tot))
 
         Builder = measured(args.tot)
-        Builder.build(args.pulse_cut)
+        Builder.build()
         Builder.save(meas_split, tt_random_split)
     else:
-        Ns = [args.tot, args.tot] #0.0566quad, 0.0496peri
-        suffixs = ["exp","pl"]
+        Ns = [args.tot,] #0.0566quad, 0.0496peri
+        suffixs = [""]
         datasets = []
         for s,N in zip(suffixs, Ns):
-            datasets.append(Dataset('gen4_spec_ISP_' + s + "_recon.fits", N))
+            datasets.append(Dataset('gen4_spec_true_flat' + s + "_recon.fits", N))
 
         Builder = simulated(int(sum(Ns)), datasets)
-        Builder.build(args.pulse_cut)
+        Builder.build()
         Builder.save(sim_split, tvt_random_split)
 
 if __name__ == '__main__':

@@ -1,3 +1,6 @@
+"""
+Hexagonal track to square track conversion functions.
+"""
 import numpy as np
 import os
 import torch
@@ -58,11 +61,15 @@ def xpol_pixel_to_world(col, row):
     return x, y
 
 def rot60(x,y,idx):
+    """Rotate x,y, coordinates of hexagonal track by idx*60 degrees.
+    """
     xy = np.stack([x,y])
     xy_rot = np.matmul(np.array([[np.cos(idx*np.pi/3),-np.sin(idx*np.pi/3)],[np.sin(idx*np.pi/3),np.cos(idx*np.pi/3)]]), xy)
     return xy_rot[0],xy_rot[1] 
 
 def reflect(x,y,idx):
+    """Reflect x,y, coordinates of hexagonal track along cardinal axis idx.
+    """
     if idx not in [0,1,2,3,4,5]: #identity
         return x,y 
     else:
@@ -72,6 +79,8 @@ def reflect(x,y,idx):
         return xy_mirror[0], xy_mirror[1]
 
 def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2):
+    """Parallelizable helper function. Takes one hexagonal track and outputs square track cube.
+    """
     sim = False
     flag = 0
 
@@ -144,7 +153,7 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
             angles_sq[k] = angle_new
             mom_phis_sq[k] = mom_angle_new
 
-        xs_aug_shift = np.where(np.mod(np.round((ys_aug - ys_aug.min())/(1.5*a)),2)==1, xs_aug+r, xs_aug) #(np.round(ys_aug,5) - 0.45465)/(1.5*a)),2)==1, xs_aug+r, xs_aug)
+        xs_aug_shift = np.where(np.mod(np.round((ys_aug - ys_aug.min())/(1.5*a)),2)==1, xs_aug+r, xs_aug)
         if a == 0:
             flag = 1
         j,i = np.round((ys_aug-ys_aug.min()) / (1.5*a)), np.round(((xs_aug_shift-xs_aug_shift.min())) / (2*r))
@@ -160,6 +169,7 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
         try:
             tracks_cube[k, 0, :, :] = np.stack([*indices,values])#Q_square
         except ValueError:
+            #Cropping track to fit in the box and flagging bad event
             flag = 1
             missing_lenth = len(Qs) - len(values)
             indices = np.concatenate((indices, (n_pixels-1)*np.ones((2, missing_lenth))),axis=1)
@@ -181,6 +191,7 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
             try:
                 tracks_cube[k, 1, :, :] = np.stack([*indices,values])#Q_square
             except ValueError:
+                #Cropping track to fit in the box
                 missing_lenth = len(Qs) - len(values)
                 indices = np.concatenate((indices, (n_pixels-1)*np.ones((2, missing_lenth))),axis=1)
                 values = np.concatenate((values, np.zeros(missing_lenth)), axis=0)
@@ -193,8 +204,10 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
 
 
 def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift=2):
+    """ Applied hex2square transformation to set of hexagonal tracks. Output depends on whether
+    tracks are simulated or measured (real).
+    """
     if isinstance(hex_tracks, tuple):
-        assert cut is not None, "Need to cut PE_PHI==0 tracks for simulated data" 
         assert n_final is not None
         assert n_final <= len(hex_tracks[0]['DETPHI'][cut])
         results = [None] * n_final
