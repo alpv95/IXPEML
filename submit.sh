@@ -20,4 +20,4 @@ ml cuda/11.2.0
 ml cudnn/7.6.5
 
 nvidia-smi
-srun python3 gpu_test.py --data_list spectra2/ISP2/train/ --save energy3 --ensemble energy
+srun python3 run_ensemble_eval.py --data_list spectra2/ISP2/train/ --save energy3 --ensemble energy
