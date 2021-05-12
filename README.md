@@ -52,21 +52,21 @@ This requires a GPU to be available for reasonable runtime (ideally multiple if 
 4. The final outputs in the saved pickle files are listed in order (each is an element of the tuple):
 
 ColDefs(
-    name = 'NN_PHI'; format = 'E'  -- NN predicted photoelectron angles
-    name = 'MOM_PHI'; format = 'E' -- Moment analysis predicted photoelectron angles
-    name = 'PHI'; format = 'E' -- True photoelectron angles (if data is simulated, otherwise this is None)
-    name = 'MOM_ELLIP'; format = 'E' -- Moment analysis measured track ellipticies
-    name = 'NN_WEIGHT'; format = 'E' -- NN predicted weights for photoelectron angles
-    name = 'NN_ABS'; format = '2E'; dim = '(2)' -- NN predicted absorption points (xy coords on the square track image grid 50x50)
-    name = 'MOM_ABS'; format = '2E'; dim = '(2)' Moments predicted absorption points (xy coords on the square track image grid 50x50)
-    name = 'XY_MOM_ABS'; format = '2E'; dim = '(2)' -- Moments predicted absorption points (xy coords on the detector grid)
-    name = 'ABS'; format = '2E'; dim = '(3)' -- True absorption points (xy coords on the square track image grid 50x50) (if data is simulated, otherwise this is None)
-    name = 'ENERGY'; format = 'E' -- True track energies in keV (if data is simulated, otherwise this is None)
-    name = 'NN_ENERGY'; format = 'E' -- NN predicted track energies in keV
-    name = 'XY_NN_ABS'; format = '2E'; dim = '(2)' -- NN predicted absorption points (xy coords on the detector grid)
-    name = 'XYZ_ABS'; format = '3E'; dim = '(3)' -- True absorption points (xyz coords on the detector grid) (if data is simulated, otherwise this is None)
-    name = 'MOM_ENERGY'; format = 'E' -- MOM predicted track energies in keV
-    name = 'NN_WEIGHT_EPIS'; format = 'E' -- NN predicted weights (epistemic) for photoelectron angles
+* name = 'NN_PHI'; format = 'E'  -- NN predicted photoelectron angles
+* name = 'MOM_PHI'; format = 'E' -- Moment analysis predicted photoelectron angles
+* name = 'PHI'; format = 'E' -- True photoelectron angles (if data is simulated, otherwise this is None)
+* name = 'MOM_ELLIP'; format = 'E' -- Moment analysis measured track ellipticies
+* name = 'NN_WEIGHT'; format = 'E' -- NN predicted weights for photoelectron angles
+* name = 'NN_ABS'; format = '2E'; dim = '(2)' -- NN predicted absorption points (xy coords on the square track image grid 50x50)
+* name = 'MOM_ABS'; format = '2E'; dim = '(2)' Moments predicted absorption points (xy coords on the square track image grid 50x50)
+* name = 'XY_MOM_ABS'; format = '2E'; dim = '(2)' -- Moments predicted absorption points (xy coords on the detector grid)
+* name = 'ABS'; format = '2E'; dim = '(3)' -- True absorption points (xy coords on the square track image grid 50x50) (if data is simulated, otherwise this is None)
+* name = 'ENERGY'; format = 'E' -- True track energies in keV (if data is simulated, otherwise this is None)
+* name = 'NN_ENERGY'; format = 'E' -- NN predicted track energies in keV
+* name = 'XY_NN_ABS'; format = '2E'; dim = '(2)' -- NN predicted absorption points (xy coords on the detector grid)
+* name = 'XYZ_ABS'; format = '3E'; dim = '(3)' -- True absorption points (xyz coords on the detector grid) (if data is simulated, otherwise this is None)
+* name = 'MOM_ENERGY'; format = 'E' -- MOM predicted track energies in keV
+* name = 'NN_WEIGHT_EPIS'; format = 'E' -- NN predicted weights (epistemic) for photoelectron angles
 )
 
 Example applications are shown the Example/example.ipynb.
