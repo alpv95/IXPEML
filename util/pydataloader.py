@@ -17,8 +17,7 @@ class H5Dataset(Dataset):
         self.pixels = 50
 
         print("Loading full dataset into memory\n")
-        with open(self.dir + "tracks_full.pickle", "rb") as f:
-            self.tracks_cube = pickle.load(f)
+        self.tracks_cube = torch.load(self.dir + "tracks_full.pickle")
         data_all = torch.load(self.dir + "labels_full.pt")
 
         self.moms = data_all["moms"]
