@@ -84,8 +84,7 @@ class builder(object):
         
         for indx, save_file in zip(indxs, self.out_files):
             tracks_cum_save = [torch.from_numpy(self.build_result["tracks"][idx]) for idx in indx]
-            with open(os.path.join(save_file, "tracks_full.pickle"), "wb") as f:
-                pickle.dump(tracks_cum_save, f)
+            torch.save(tracks_cum_save, os.path.join(save_file, "tracks_full.pickle"))
             torch.save( {key: value[indx] for (key,value) in self.build_result.items() if key != "tracks"}, os.path.join(save_file,"labels_full.pt"))
             print("Saved, ", save_file )
         
@@ -125,8 +124,12 @@ class simulated(builder):
         cur_idx = 0
         for dataset in self.datasets:
             n_train_final = dataset.total
-            print("Building ", dataset.total, "tracks of", dataset.file)
-            fits_data = super().init_build(os.path.join(self.in_file, dataset.file),)
+            if os.path.isdir(self.in_file):
+                print("Building ", dataset.total, "tracks of", dataset.file)
+                fits_data = super().init_build(os.path.join(self.in_file, dataset.file),)
+            else:
+                print("Building ", dataset.total, "tracks of", self.in_file)
+                fits_data = super().init_build(self.in_file)
 
             cut = np.ones(len(fits_data[1]['PE_PHI']), dtype=bool)
 
@@ -139,7 +142,7 @@ class simulated(builder):
                                                                                                         p=[1-self.tailvpeak, self.tailvpeak],).astype('bool')
 
             print(len(fits_data[0]['DETPHI']),"loaded ok")
-            print(len(fits_data[0]['DETPHI'][cut]), "uncut")
+            print(len(fits_data[0]['DETPHI'][cut]), "post cut")
             assert len(fits_data[0]['DETPHI'][cut]) >= n_train_final, "Too few tracks {}, N_final {} too large.".format(len(fits_data[0]['DETPHI'][cut]), n_train_final)
 
             tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(fits_data, cut=cut, n_final=n_train_final, augment=self.augment)
@@ -204,7 +207,7 @@ class measured(builder):
 
 def main():
     meas_split = (1, 0) #should sum to 1
-    sim_split = (0.95, 0.025, 0.025)
+    sim_split = (1, 0, 0)
 
     if args.meas:
         #get total number of tracks
@@ -217,11 +220,15 @@ def main():
         Builder.build()
         Builder.save(meas_split, tt_random_split)
     else:
-        Ns = [args.tot,] #0.0566quad, 0.0496peri
-        suffixs = [""]
-        datasets = []
-        for s,N in zip(suffixs, Ns):
-            datasets.append(Dataset('gen4_spec_true_flat' + s + "_recon.fits", N))
+        if os.path.isdir(args.input_file):
+            Ns = [args.tot,] #0.0566quad, 0.0496peri
+            suffixs = [""]
+            datasets = []
+            for s,N in zip(suffixs, Ns):
+                datasets.append(Dataset('gen4_spec_true_flat' + s + "_recon.fits", N))
+        else:
+            Ns = [args.tot,]
+            datasets = [Dataset("", args.tot)]
 
         Builder = simulated(int(sum(Ns)), datasets)
         Builder.build()

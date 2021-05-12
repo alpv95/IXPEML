@@ -193,7 +193,7 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
     if sim:
         return tracks_cube, angles_sq, abs_pts_sq, mom_phis_sq, mom_abs_pts_sq
     else:
-        return (tracks_cube, mom_phi, mom_abs_pts_sq, flag)  
+        return tracks_cube, mom_phi, mom_abs_pts_sq, flag  
 
 
 def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift=2):
@@ -224,7 +224,6 @@ def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift
         results = [None] * len(hex_tracks)
         for i, hex_track in enumerate(hex_tracks):
             results[i] = hex2square_sub(hex_track, augment=augment)
-        print("DONE!")
 
         tracks_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum = zip(*results)
         mom_phi_cum = torch.from_numpy(np.array(mom_phi_cum).astype(np.float))

@@ -12,19 +12,16 @@ parser.add_argument('save_name', type=str,
                     help='Save Net FoV results in Pandas dataframe with this name')
 parser.add_argument('--ensemble', type=str, choices=["bessel_rand","bessel_rand_small","heads_only","tailvpeak","energy", "flat_weight"], default="bessel_rand",
                     help='Which network ensemble to use: Ensemble prediction or single prediction')
-parser.add_argument('--model_list', type=str, nargs='+', default=[],
-                    help='List of Models to evaluate')
 parser.add_argument('--data_list', type=str, nargs='+',
                     help='List of Data to evaluate on')
 parser.add_argument('--datatype', type=str, default="sim", choices=["sim","meas"],
                     help='Simulated or Measured track data')
 parser.add_argument('--stokes_correct', type=float, choices=[2.0, 2.3, 2.7, 3.1, 3.7, 5.9], default=None,
-                    help='Whether to correct measured tracks for spurious modulation')
+                    help='Whether to correct measured tracks for spurious modulation (incomplete).')
 args = parser.parse_args()
 
 
 def main():
-    model_list = [M + '/models' for M in args.model_list]
     net_list = ensembles[args.ensemble]
 
     print("Evaluating using ensemble: \n", net_list)
