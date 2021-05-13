@@ -229,11 +229,6 @@ class TrackAngleRegressor:
             val_criterion = cnn_loss.MSErrLossAll3(size_average=False,)
             label_number = 5
             hparams['outputtype'] = '5pos4err'
-        elif losstype == 'mserr':
-            criterion = cnn_loss.MSErrLoss(alpha=hparams['alpha_loss'], Z=hparams['Z'])
-            val_criterion = cnn_loss.MSErrLoss(size_average=False, alpha=hparams['alpha_loss'], Z=hparams['Z'])
-            label_number = 2
-            hparams['outputtype'] = '2pos1err'
         elif losstype == 'energy':
             criterion = cnn_loss.MSErrLoss()
             val_criterion = cnn_loss.MSErrLoss(size_average=False)
@@ -249,40 +244,6 @@ class TrackAngleRegressor:
             val_criterion = nn.CrossEntropyLoss(size_average=False)
             label_number = 1
             hparams['outputtype'] = '3pos'
-        elif losstype == 'cos':
-            criterion = cnn_loss.CosineLoss(alpha=hparams['alpha_loss'])
-            val_criterion = cnn_loss.CosineLoss(size_average=False)
-            label_number = 2
-            hparams['outputtype'] = '2pos'
-        elif losstype == 'maerr':
-            criterion = cnn_loss.MAErrLoss(alpha=hparams['alpha_loss'])
-            val_criterion = cnn_loss.MAErrLoss(size_average=False, alpha=hparams['alpha_loss'])
-            label_number = 2
-            hparams['outputtype'] = '2pos1err'
-        elif losstype == 'mserrall1':
-            criterion = cnn_loss.MSErrLossAll1(alpha=hparams['alpha_loss'], 
-                            Z=hparams['Z'], lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
-            val_criterion = cnn_loss.MSErrLossAll1(size_average=False, alpha=hparams['alpha_loss'], 
-                            Z=hparams['Z'],lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
-            label_number = 5
-            hparams['outputtype'] = '5pos1err'
-        elif losstype == 'mserrallE':
-            criterion = cnn_loss.MSErrLossAllE(alpha=hparams['alpha_loss'])
-            val_criterion = cnn_loss.MSErrLossAllE(size_average=False, alpha=hparams['alpha_loss'])
-            label_number = 5
-            hparams['outputtype'] = '5pos1err'
-        elif losstype == 'CE':
-            criterion = nn.CrossEntropyLoss()
-            val_criterion = nn.CrossEntropyLoss(size_average=False)
-            label_number = 1
-            hparams['outputtype'] = 'CE'
-        elif losstype == 'abs_pts':
-            criterion = nn.MSELoss()
-            val_criterion = nn.MSELoss(size_average=False)
-            hparams['outputtype'] = 'abs_pts'
-            # Ensure that y has proper dims; change target to points on unit circle
-            #if len(y.shape) == 1:
-                #y = np.concatenate((np.cos(y).reshape(-1,1), np.sin(y).reshape(-1,1)), axis=1)
         else:
             raise ValueError('Loss type not recognized')
 
@@ -524,27 +485,9 @@ class TrackAngleRegressor:
         elif output_type == '1energy':
             y_hat_angles = y_hats
 
-        elif output_type == '2pos':
-            # Calculate angles
-            y_hats = y_hats.reshape(-1,2)
-            y_hat_angles = np.arctan2(y_hats[:,1], y_hats[:,0])
-
         elif output_type == '3pos':
             #Apply sigmoid to tailvpeak outputs
             y_hat_angles = softmax(y_hats, axis=-1)
-
-        elif output_type == '2pos1err':
-            y_hats = y_hats.reshape(-1,3)
-            y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])) ))
-
-        elif output_type == '7pos2err':
-            y_hats = y_hats.reshape(-1,9)
-            y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), np.arctan2(y_hats[:,4], y_hats[:,3]), np.sqrt(np.exp(y_hats[:,5])), y_hats[:,6],
-                                         y_hats[:,7], y_hats[:,8] ))
-
-        elif output_type == 'abs_pts':
-             y_hats = y_hats.reshape(-1,2)
-             y_hat_angles = None
 
         elif output_type == '5pos1err':
             y_hats = y_hats.reshape(-1,6)
@@ -555,14 +498,6 @@ class TrackAngleRegressor:
             y_hats = y_hats.reshape(-1,9)
             y_hat_angles = np.array(( np.arctan2(y_hats[:,1], y_hats[:,0]), np.sqrt(np.exp(y_hats[:,2])), y_hats[:,3],
                                         y_hats[:,4], y_hats[:,5], y_hats[:,6], y_hats[:,7], y_hats[:,8]))
-
-        elif output_type == 'abs_pts':
-             y_hats = y_hats.reshape(-1,2)
-             y_hat_angles = None
-
-        elif output_type == 'CE':
-             y_hats = y_hats.reshape(-1,1)
-             y_hat_angles = np.argmax(y_hats, axis=1)
 
         metrics = {
             'y_hat': y_hats,  # the actual predictions - could be a vec or a 2 col mat

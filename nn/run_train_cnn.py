@@ -18,14 +18,14 @@ from torchvision import transforms
 
 
 def main():
-    Spec = namedtuple('Spec', ['name', 'data_file', 'loss', 'alpha_loss','Z','lambda_abs','lambda_E','optim_method',
+    Spec = namedtuple('Spec', ['name', 'data_file', 'loss', 'alpha_loss','lambda_abs','lambda_E','optim_method',
                         'input_channels','n_multistarts', 'n_multistarts_per_job','n_threads', 'subset'])
 
     use_cluster = True
     data_dir = os.path.realpath('data/')
     data_file = data_dir + "/spectra_calib/687_20/"
 
-    job = Spec(name='68720aeff_peakonly_mserrall3', data_file=data_file, loss='mserrall3', Z=1, alpha_loss=0.8, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='68720aeff_peakonly_mserrall3', data_file=data_file, loss='mserrall3', alpha_loss=0.8, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
     
     # Set dirs
@@ -44,9 +44,6 @@ def main():
     layer_combos_keep = [layer for layer in layer_combos if check_pyramidal(layer)]
 
     hparams = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
@@ -57,21 +54,16 @@ def main():
         'alpha_loss': job.alpha_loss,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'Z': job.Z,
         'input_channels': job.input_channels,
         'n_epochs': 171, #[50]
     } 
     hparams1 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 2048, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -80,16 +72,12 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams2 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 512, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -98,15 +86,11 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams3 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 1024, #[64],
         'verbose': 1, #[1],
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -116,16 +100,12 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams4 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 4096, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -134,16 +114,12 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams5 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 2048, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -152,16 +128,12 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams6 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 512, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -170,15 +142,11 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams7 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 1024, #[64],
         'verbose': 1, #[1],
-        'Z': job.Z,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -188,15 +156,11 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams8 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 6144, #[64],
         'verbose': 1, #[1],
-        'Z': 1e-6,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -206,15 +170,11 @@ def main():
         'n_epochs': 171, #[50]
     } 
     hparams9 = {  # Smaller test set values
-        'conv1channels': 16,
-        'conv2channels': 32,
-        'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
         'wd': 1e-4, #[5e-5],
         'batch_size': 6144, #[64],
         'verbose': 1, #[1],
-        'Z': 1e-6,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
         'dropout': 0.0,
@@ -330,30 +290,19 @@ def run_net(ind, data_file, job_dir, opts):
     
     run_dir = os.path.realpath(job_dir)
 
-    # Load data
-    #   Ignore test data
-    #train = H5Dataset(data_file,'train', losstype=opts['losstype'])
-    #with h5py.File(dat_file, 'r') as f:
-    #    mean = f['train']['tracks_mean'][()]
-    #    std = f['train']['tracks_std'][()] 
-    #    maxx = f['train']['tracks_max'][()]
     mean, std = torch.load(data_file + "train/ZN.pt")
     meanE, stdE = torch.load(data_file + "train/ZNE.pt")
 
     train = H5Dataset(data_file + "train/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE)) 
     validate = H5Dataset(data_file + "val/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE))
-    #test = H5Dataset(data_file + "test/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std)]), load_all=True)
     test = H5Dataset(data_file + "test/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE))
-    #measured = H5DatasetEval("/scratch/groups/rwr/alpv95/data/expanded/simgen4_2p0_unpol_shift/train/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std), ToTensor()]), load_all=True)   
-    #measured_test = H5DatasetEval(meas1_file,'train', 'meas', losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=train.mean,std=train.std,set_max=train.max), ToTensor()]))
 
     kwargs = {'num_workers': 4, 'pin_memory': True}
 
     train_loader = torch.utils.data.DataLoader(train, batch_size=opts['batch_size'], shuffle=True, **kwargs)  #opts may actually be in opts[hparams][batch_size]?
     val_loader = torch.utils.data.DataLoader(validate, batch_size=opts['batch_size'], shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(test, batch_size=opts['batch_size'], shuffle=False, **kwargs)
-    meas_loader = None #torch.utils.data.DataLoader(measured, batch_size=opts['batch_size'], shuffle=False, **kwargs)
-    #meas_test_loader = torch.utils.data.DataLoader(measured_test, batch_size=opts['batch_size'], shuffle=False, **kwargs)
+    meas_loader = None 
 
     # Set options
     opts['fc1size'] = opts['fc_sizes'][0]
@@ -384,24 +333,19 @@ def run_net(ind, data_file, job_dir, opts):
         else:
             print("Loading from checkpoint! \n")
             m = TrackAngleRegressor( load_checkpoint=os.path.join(model_file, checkpoints[-1]) )
-        #print(X_train.shape,y_train.shape,opts)
+
         train_mse, stats = m.train(train_loader, val_loader, model_file, meas_loader, **opts)  # doesn't return all train set predictions
-        #train_mse, stats = m.train(train_loader, val_loader, **opts)`
 
         # Calculate on validation, test and measured set
         validate_mse, validate_metrics = m.test(val_loader, output_all=True)
         test_mse, test_metrics = m.test(test_loader, output_all=True)
         print('Test_mse {}'.format(test_mse))
-        #meas_metrics = m.predict(meas_loader)
-        #meas_test_metrics = m.predict(meas_test_loader)
 
         # Save results - error, predictions, and convergence stats
         results = {
             'train': {'mse': train_mse, 'stats': stats},
             'validate': {'mse': validate_mse, 'metrics': validate_metrics},
             'test': {'mse': test_mse, 'metrics': test_metrics},
-           # 'meas': {'metrics': meas_metrics},
-           # 'meas_test': {'metrics': meas_test_metrics}
         }
         results_file = os.path.join(run_dir, 'results', 'net{}_{}.h5'.format(ind, i_multistart))
         print(results)
