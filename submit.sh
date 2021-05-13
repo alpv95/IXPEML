@@ -20,4 +20,4 @@ ml cuda/11.2.0
 ml cudnn/7.6.5
 
 nvidia-smi
-srun python3 run_ensemble_eval.py energy3 --data_list spectra2/ISP2/train/ --ensemble energy
+srun python3 run_ensemble_eval.py energy3 --data_list spectra2/ISP2/train/ --ensemble energy --datatype sim

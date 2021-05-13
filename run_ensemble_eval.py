@@ -14,7 +14,7 @@ parser.add_argument('--ensemble', type=str, choices=["bessel_rand","bessel_rand_
                     help='Which network ensemble to use: Ensemble prediction or single prediction')
 parser.add_argument('--data_list', type=str, nargs='+',
                     help='List of Data to evaluate on')
-parser.add_argument('--datatype', type=str, default="sim", choices=["sim","meas"],
+parser.add_argument('--datatype', type=str, default="meas", choices=["sim","meas"],
                     help='Simulated or Measured track data')
 parser.add_argument('--stokes_correct', type=float, choices=[2.0, 2.3, 2.7, 3.1, 3.7, 5.9], default=None,
                     help='Whether to correct measured tracks for spurious modulation (incomplete).')

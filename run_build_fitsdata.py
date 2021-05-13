@@ -25,8 +25,8 @@ parser.add_argument('--augment', type=int, choices=[1,3], default=3,
                     help='Number of Track augmentation randomly distributed in dataset. These should always be 3 during inference and 1 during training')
 parser.add_argument('--npix', type=int, choices=[30, 50], default=50,
                     help='Number of pixels in square conversions. This should be 50 for >= v1.2')  
-parser.add_argument('--meas', action='store_true',
-                    help='Whether data is real or simulated, if squaring measured data this argument is required')
+parser.add_argument('--sim', action='store_true',
+                    help='Whether to incorporate monte carlo simulated data, not strictly necessary.')
 parser.add_argument('--tot', type=int, default=None,
                     help='The total number of tracks to convert to square')
 parser.add_argument('--peak_only', action='store_true',
@@ -207,9 +207,9 @@ class measured(builder):
 
 def main():
     meas_split = (1, 0) #should sum to 1
-    sim_split = (1, 0, 0)
+    sim_split = (0.96, 0.025, 0.015)
 
-    if args.meas:
+    if not args.sim:
         #get total number of tracks
         if not args.tot:
                 with fits.open(args.input_file, memmap=False) as hdu:
