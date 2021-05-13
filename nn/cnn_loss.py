@@ -102,7 +102,7 @@ class MSErrLossAll3(nn.Module):
     besseli0 = I0()
 
     def __init__(self, size_average=True, reduce=True,):
-        super(MSErrLossAll2, self).__init__()
+        super(MSErrLossAll3, self).__init__()
         self.size_average = size_average
         self.reduce = reduce
 

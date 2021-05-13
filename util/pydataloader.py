@@ -39,7 +39,7 @@ class H5Dataset(Dataset):
             else:
                 raise("No energy calibration!")
 
-            if (losstype == "mserrall1" or losstype == "mserrall2"):
+            if (losstype == "mserrall1" or losstype == "mserrall2" or losstype == "mserrall3"):
                 self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
                                 self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
             elif (losstype == "energy"):

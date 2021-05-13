@@ -23,9 +23,9 @@ def main():
 
     use_cluster = True
     data_dir = os.path.realpath('data/')
-    data_file = data_dir + "/expanded/true_flat_1p0/"
+    data_file = data_dir + "/spectra_calib/687_20/"
 
-    job = Spec(name='733flat_tailvpeak2_1p0_8e-3', data_file=data_file, loss='tailvpeak2', alpha_loss=0.8, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='68720aeff_peakonly_mserrall3', data_file=data_file, loss='mserrall3', Z=1, alpha_loss=0.8, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
     
     # Set dirs
@@ -49,7 +49,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 4096, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
@@ -67,7 +67,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 2048, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
@@ -85,7 +85,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 512, #[64],
         'verbose': 1, #[1],
         'optim_method': job.optim_method,
@@ -103,7 +103,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 1024, #[64],
         'verbose': 1, #[1],
         'Z': job.Z,
@@ -121,7 +121,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 4096, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
@@ -139,7 +139,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 2048, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
@@ -157,7 +157,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 512, #[64],
         'verbose': 1, #[1],
         'optim_method': "mom",
@@ -175,7 +175,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 1024, #[64],
         'verbose': 1, #[1],
         'Z': job.Z,
@@ -193,7 +193,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 6144, #[64],
         'verbose': 1, #[1],
         'Z': 1e-6,
@@ -211,7 +211,7 @@ def main():
         'fc_sizes': [128,64], #layer_combos_keep,
         'losstype': job.loss, #[job.loss],
         'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 8e-3, #[5e-5],
+        'wd': 1e-4, #[5e-5],
         'batch_size': 6144, #[64],
         'verbose': 1, #[1],
         'Z': 1e-6,
@@ -292,7 +292,7 @@ def main():
         'proc': job.n_threads,
         'mem': 22,  # GB
         # 'time': 72,  # hr, a target time for all multistarts in a job
-        'time': 24.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
+        'time': 33.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
         'working_dir': working_dir,
         'name': 'train_{}'.format(job.name),
         'gpus': 4,
