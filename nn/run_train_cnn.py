@@ -15,17 +15,23 @@ from util.pydataloader import H5Dataset, ZNormalize
 from collections import namedtuple
 from nn.cnn import TrackAngleRegressor
 from torchvision import transforms
+import argparse
 
+# def parse():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--local_rank", type=int, default=0)
+#     args = parser.parse_args()
+#     return args
 
 def main():
-    Spec = namedtuple('Spec', ['name', 'data_file', 'loss', 'alpha_loss','lambda_abs','lambda_E','optim_method',
+    Spec = namedtuple('Spec', ['name', 'data_file', 'loss', 'opt_level', 'alpha_loss','lambda_abs','lambda_E','optim_method',
                         'input_channels','n_multistarts', 'n_multistarts_per_job','n_threads', 'subset'])
 
     use_cluster = True
     data_dir = os.path.realpath('data/')
-    data_file = data_dir + "/spectra_calib/687_20/"
+    data_file = data_dir + "/spectra_calib/687_20_tailvpeak1p0/"
 
-    job = Spec(name='68720aeff_peakonly_mserrall3', data_file=data_file, loss='mserrall3', alpha_loss=0.8, lambda_abs=0.2, lambda_E=0.2,
+    job = Spec(name='68720aeff_tailvpeak1p0_O1', data_file=data_file, loss='tailvpeak', opt_level='O1', alpha_loss=0.8, lambda_abs=0.2, lambda_E=0.2,
                 optim_method='RLRP', input_channels=2, n_multistarts=1, n_multistarts_per_job=1, n_threads=1, subset=False)
     
     # Set dirs
@@ -43,148 +49,178 @@ def main():
     # Make sure all architectures are "pyramidal"
     layer_combos_keep = [layer for layer in layer_combos if check_pyramidal(layer)]
 
+    # hparams = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.0015, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 1024, #[64],
+    #     'optim_method': job.optim_method,
+    #     'opt_level': job.opt_level,
+    #     'alpha_loss': job.alpha_loss,
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams2 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.0015, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 2048, #[64],
+    #     'optim_method': job.optim_method,
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams3 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.0015, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 1024, #[64],
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'optim_method': job.optim_method,
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams4 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 256, #[64],
+    #     'optim_method': "mom",
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams6 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 2048, #[64],
+    #     'optim_method': "mom",
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams7 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 1024, #[64],
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'optim_method': "mom",
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams8 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 512, #[64],
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'optim_method': "mom",
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+    # hparams9 = {  # Smaller test set values
+    #     'losstype': job.loss, #[job.loss],
+    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
+    #     'wd': 5e-5, #[5e-5],
+    #     'batch_size': 512, #[64],
+    #     'lambda_abs': job.lambda_abs,
+    #     'lambda_E': job.lambda_E,
+    #     'opt_level': job.opt_level,
+    #     'optim_method': "RLRP",
+    #     'alpha_loss': job.alpha_loss,
+    #     'n_epochs': 171, #[50]
+    # } 
+
+
     hparams = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 4096, #[64],
-        'verbose': 1, #[1],
+        'wd': 9e-3, #[5e-5],
+        'batch_size': 1024, #[64],
         'optim_method': job.optim_method,
-        'dropout': 0.0,
+        'opt_level': job.opt_level,
         'alpha_loss': job.alpha_loss,
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'input_channels': job.input_channels,
-        'n_epochs': 171, #[50]
-    } 
-    hparams1 = {  # Smaller test set values
-        'losstype': job.loss, #[job.loss],
-        'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 2048, #[64],
-        'verbose': 1, #[1],
-        'optim_method': job.optim_method,
-        'lambda_abs': job.lambda_abs,
-        'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
-        'alpha_loss': job.alpha_loss,
-        'n_epochs': 171, #[50]
-    } 
-    hparams2 = {  # Smaller test set values
-        'losstype': job.loss, #[job.loss],
-        'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 512, #[64],
-        'verbose': 1, #[1],
-        'optim_method': job.optim_method,
-        'lambda_abs': job.lambda_abs,
-        'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
-        'alpha_loss': job.alpha_loss,
         'n_epochs': 171, #[50]
     } 
     hparams3 = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
         'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
+        'wd': 9e-3, #[5e-5],
         'batch_size': 1024, #[64],
-        'verbose': 1, #[1],
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
+        'opt_level': job.opt_level,
         'optim_method': job.optim_method,
         'alpha_loss': job.alpha_loss,
         'n_epochs': 171, #[50]
     } 
     hparams4 = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
-        'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 4096, #[64],
-        'verbose': 1, #[1],
+        'lr': 0.02, #[8e-5, 8e-5, 8e-5],
+        'wd': 9e-3, #[5e-5],
+        'batch_size': 256, #[64],
         'optim_method': "mom",
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
-        'alpha_loss': job.alpha_loss,
-        'n_epochs': 171, #[50]
-    } 
-    hparams5 = {  # Smaller test set values
-        'losstype': job.loss, #[job.loss],
-        'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 2048, #[64],
-        'verbose': 1, #[1],
-        'optim_method': "mom",
-        'lambda_abs': job.lambda_abs,
-        'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
-        'alpha_loss': job.alpha_loss,
-        'n_epochs': 171, #[50]
-    } 
-    hparams6 = {  # Smaller test set values
-        'losstype': job.loss, #[job.loss],
-        'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 512, #[64],
-        'verbose': 1, #[1],
-        'optim_method': "mom",
-        'lambda_abs': job.lambda_abs,
-        'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
+        'opt_level': job.opt_level,
         'alpha_loss': job.alpha_loss,
         'n_epochs': 171, #[50]
     } 
     hparams7 = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
-        'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
+        'lr': 0.02, #[8e-5, 8e-5, 8e-5],
+        'wd': 9e-3, #[5e-5],
         'batch_size': 1024, #[64],
-        'verbose': 1, #[1],
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
+        'opt_level': job.opt_level,
         'optim_method': "mom",
         'alpha_loss': job.alpha_loss,
         'n_epochs': 171, #[50]
     } 
     hparams8 = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
-        'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 6144, #[64],
-        'verbose': 1, #[1],
+        'lr': 0.02, #[8e-5, 8e-5, 8e-5],
+        'wd': 9e-3, #[5e-5],
+        'batch_size': 512, #[64],
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
+        'opt_level': job.opt_level,
         'optim_method': "mom",
         'alpha_loss': job.alpha_loss,
         'n_epochs': 171, #[50]
     } 
     hparams9 = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
-        'lr': 0.04, #[8e-5, 8e-5, 8e-5],
-        'wd': 1e-4, #[5e-5],
-        'batch_size': 6144, #[64],
-        'verbose': 1, #[1],
+        'lr': 0.0095, #[8e-5, 8e-5, 8e-5],
+        'wd': 9e-3, #[5e-5],
+        'batch_size': 512, #[64],
         'lambda_abs': job.lambda_abs,
         'lambda_E': job.lambda_E,
-        'dropout': 0.0,
-        'input_channels': job.input_channels,
-        'optim_method': "mom",
+        'opt_level': job.opt_level,
+        'optim_method': "RLRP",
         'alpha_loss': job.alpha_loss,
         'n_epochs': 171, #[50]
     } 
 
-    hparamsets = [hparams, hparams1, hparams2, hparams3, hparams4, hparams5, hparams6, hparams7,] #[hparams, hparams1, hparams2] #build_hparamsets(hparams)
+    hparamsets = [hparams, hparams3, hparams4, hparams7, hparams8, hparams9] #[hparams, hparams1, hparams2] #build_hparamsets(hparams)
     n_hparamsets = len(hparamsets)
     print('{n} hparamsets generated'.format(n=n_hparamsets))
 
@@ -250,9 +286,8 @@ def main():
         'env': 'source /programs/x86_64/lib/python-3.5.2-anaconda-4.1.1/bin/activate tracksml',
         'run_paths': run_paths,
         'proc': job.n_threads,
-        'mem': 22,  # GB
-        # 'time': 72,  # hr, a target time for all multistarts in a job
-        'time': 33.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
+        'mem': 75,  # GB
+        'time': 15.5, # 1.5M train set, 50 epochs, 1 multistart/job?, time in hours
         'working_dir': working_dir,
         'name': 'train_{}'.format(job.name),
         'gpus': 4,
@@ -269,7 +304,7 @@ def main():
             break
 
 
-def run_net(ind, data_file, job_dir, opts):
+def run_net(ind, data_file, job_dir, opts, local_rank, nworkers):
     """Main function that runs in parallel
 
     Args:
@@ -285,9 +320,19 @@ def run_net(ind, data_file, job_dir, opts):
         Saves dumped net to a separate hdf5 file with (job_ind, multistart_ind)
     """
     print('Job {}: Training neural net on data in {} with opts {}'.format(ind, data_file, opts))
+    # args = parse()
+    # local_rank = args.local_rank
+    # nworkers = 1
 
     print('Running with PyTorch version {}'.format(torch.__version__))
-    
+
+    if torch.cuda.device_count() > 1:
+        torch.cuda.set_device(local_rank)
+        torch.distributed.init_process_group(backend='nccl',init_method='env://')
+        assert torch.backends.cudnn.enabled, "Amp requires cudnn backend to be enabled."
+        world_size = torch.distributed.get_world_size()
+        print("WORLD_SIZE: ", world_size)
+
     run_dir = os.path.realpath(job_dir)
 
     mean, std = torch.load(data_file + "train/ZN.pt")
@@ -295,19 +340,17 @@ def run_net(ind, data_file, job_dir, opts):
 
     train = H5Dataset(data_file + "train/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE)) 
     validate = H5Dataset(data_file + "val/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE))
-    test = H5Dataset(data_file + "test/", losstype=opts['losstype'],transform=transforms.Compose([ZNormalize(mean=mean,std=std) ]), energy_cal=(meanE, stdE))
 
-    kwargs = {'num_workers': 4, 'pin_memory': True}
+    train_sampler = None
+    val_sampler = None
+    if torch.cuda.device_count() > 1:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(validate)
 
-    train_loader = torch.utils.data.DataLoader(train, batch_size=opts['batch_size'], shuffle=True, **kwargs)  #opts may actually be in opts[hparams][batch_size]?
-    val_loader = torch.utils.data.DataLoader(validate, batch_size=opts['batch_size'], shuffle=True, **kwargs)
-    test_loader = torch.utils.data.DataLoader(test, batch_size=opts['batch_size'], shuffle=False, **kwargs)
-    meas_loader = None 
+    kwargs = {'num_workers': nworkers, 'pin_memory': True}
 
-    # Set options
-    opts['fc1size'] = opts['fc_sizes'][0]
-    opts['fc2size'] = opts['fc_sizes'][1]
-    opts['track_stats'] = True
+    train_loader = torch.utils.data.DataLoader(train, batch_size=opts['batch_size'], shuffle=(train_sampler is None), sampler=train_sampler, **kwargs)
+    val_loader = torch.utils.data.DataLoader(validate, batch_size=opts['batch_size'], shuffle=False, sampler=val_sampler, **kwargs)
 
     # Run for each multistart
     n_multistarts = opts['n_multistarts']
@@ -316,7 +359,6 @@ def run_net(ind, data_file, job_dir, opts):
     # Clean up opts of extraneous params
     del opts['n_multistarts']
     del opts['multistart_start_ind']
-    del opts['fc_sizes']
 
     for i_multistart in range(n_multistarts):
         # Get this run's seed
@@ -326,20 +368,17 @@ def run_net(ind, data_file, job_dir, opts):
         print('Running multistart {} with seed {}'.format(i_multistart, rng_seed))
 
         model_file = os.path.join(run_dir, 'models') #to save model checkpoints
+        m = TrackAngleRegressor(opts['losstype'])
         # Build and train net
-        checkpoints = [mdl for mdl in os.listdir(model_file) if opts['optim_method'] + "_" + str(opts["batch_size"]) in mdl]
-        if not checkpoints:
-            m = TrackAngleRegressor()
-        else:
-            print("Loading from checkpoint! \n")
-            m = TrackAngleRegressor( load_checkpoint=os.path.join(model_file, checkpoints[-1]) )
-
-        train_mse, stats = m.train(train_loader, val_loader, model_file, meas_loader, **opts)  # doesn't return all train set predictions
-
-        # Calculate on validation, test and measured set
-        validate_mse, validate_metrics = m.test(val_loader, output_all=True)
-        test_mse, test_metrics = m.test(test_loader, output_all=True)
-        print('Test_mse {}'.format(test_mse))
+        # checkpoints = [mdl for mdl in os.listdir(model_file) if opts['optim_method'] + "_" + str(opts["batch_size"]) in mdl]
+        # if not checkpoints:
+        #     m = TrackAngleRegressor()
+        # else:
+        #     print("Loading from checkpoint! \n")
+        #     m = TrackAngleRegressor( load_checkpoint=os.path.join(model_file, checkpoints[-1]) )
+        print('RANK LOCAL:', local_rank)
+        train_mse = m.train(train_loader, val_loader, train_sampler, model_file, local_rank=local_rank, 
+                                    world_size=world_size, **opts)  # doesn't return all train set predictions
 
         # Save results - error, predictions, and convergence stats
         results = {

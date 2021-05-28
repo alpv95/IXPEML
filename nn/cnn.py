@@ -12,6 +12,12 @@ import torch.nn.init as weight_init
 from torch.autograd import Variable
 from scipy.special import expit
 from nn import cnn_loss
+from apex import amp
+from apex.parallel import DistributedDataParallel as DDP
+import torch.distributed as dist
+import apex
+import shutil
+import gc
 
 def softmax(x, axis):
     """Compute softmax values for each sets of scores in x."""
@@ -92,8 +98,6 @@ class ResNet(nn.Module):
             output_num = 6
         elif outputtype == '5pos4err':
             output_num = 9
-        elif outputtype == 'CE':
-            output_num = 6
 
         self.conv1 = nn.Conv2d(self.input_channels, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -102,7 +106,6 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, output_num)
-        # self.sigmoid = nn.Sigmoid() #for tailvpeak training only, now included separately in Binary loss function
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -121,49 +124,48 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        # out = self.sigmoid(out) #for tailvpeak training only
         return out
 
 
 
-def TrackNet(pixels, hparams=None, params=None): 
-    hparams_ = {
-        'outputtype': '1ang',  # 1 angle in [-pi,pi)
-        'pixels': pixels,
-    }
-
-    if hparams is None:
-        hparams = hparams_
-    else:
-        hparams = {**hparams_, **hparams}
-
-    return ResNet(BasicBlock, [1,1,1,1], hparams['outputtype'], hparams['dropout'], hparams['input_channels'])
+def TrackNet(outputtype): 
+    return ResNet(BasicBlock, [1,1,1,1], outputtype, 0, 2)
 
 
 class TrackAngleRegressor:
     """Interface for convolutional net for calculating track angle"""
-    def __init__(self, load_checkpoint=None, input_channels=1, pixels=50):
-        self.net = None
-        self.opts = {}
+    def __init__(self, losstype, load_checkpoint=None, input_channels=2, pixels=50, use_gpu=True, **kwargs):
         self.pixels = pixels
         self.input_channels = input_channels
+        self.losstype = losstype
+
+        # Set GPU use if desired.
+        if use_gpu and torch.cuda.is_available():
+            device = torch.device("cuda")
+            print("NN on GPU \n")
+            gc.collect()
+            torch.cuda.empty_cache()
+        else:
+            use_gpu = False
+            device = torch.device("cpu")
+            print("NN on CPU")
+
+        loss_to_output = {'mserrall2': '5pos1err', 'mserrall3':'5pos4err', 
+                            'energy':'1energy', 'tailvpeak':'1ang', 
+                            'tailvpeak2':'3pos',}
+        self.outputtype = loss_to_output[self.losstype]
+
+        # Build net
+        self.net = TrackNet(self.outputtype)
+        self.net.to(device)
+
         if load_checkpoint is not None:
-            #pixels = model['hparams']['pixels']
-            #self.net = TrackNet(pixels, hparams=model['hparams'], params=model['params'])
-            if torch.cuda.is_available():
-               self.net = torch.load(load_checkpoint)
-               if torch.cuda.device_count() > 1:
-                   print("Let's use", torch.cuda.device_count(), "GPUs!")
-                   self.net = nn.DataParallel(self.net)
-            else:
-               self.net = torch.load(load_checkpoint, map_location='cpu')
-            #self.opts = model['opts']
+            print("=> loading checkpoint '{}'".format(load_checkpoint))
+            self.net.load_state_dict(torch.load(load_checkpoint))
             
 
-    def train(self, train_loader, val_loader, checkpoint_dir, meas_loader=None,
-              losstype='mse', lr=1e-1, wd=1e-4, n_epochs=10, batch_size=128, optim_method='mom',
-              verbose=1, rng_seed=None, use_gpu=True, track_stats=False,
-              **kwargs):
+    def train(self, train_loader, val_loader, train_sampler, checkpoint_dir, local_rank=0, world_size=1, 
+                n_epochs=10, batch_size=256, optim_method='mom', rng_seed=None, **kwargs):
         """Train model on provided data. Uses Adam optimizer.
 
         Args:
@@ -175,99 +177,60 @@ class TrackAngleRegressor:
             wd: float, weight decay
             n_epochs: int, number of epochs (runs thru whole batch) to train
             batch_size: int, number of samples per batch
-            verbose: 0 or 1, amount of output to print
             rng_seed: None or int, random number seed used for all seeds to get consistent results
-            use_gpu: bool, whether to use the (first) GPU. Only has effect if a GPU is available.
-            track_stats: bool, whether to track stats throughout training. If true, returns a tuple of mse and stats.
             **kwargs: additional hparams for the net. See TrackNet's constructor's hparams dict.
 
         Returns: if track_stats=False, returns mse; else returns tuple of (mse, stats)
             mse: float, mean squared error in angular distance between predicted and y
             stats: dict of stats taken at steps
         """
-        # Save keyword opts
-        args = locals()
-        for param in inspect.signature(self.train).parameters.values():
-            if param.default is not param.empty:
-                self.opts[param.name] = args[param.name]
-
         # Set RNG seeds
-        if rng_seed is not None:
-            if verbose > 0:
-                print('Setting RNG seed to {}'.format(rng_seed))
-            random.seed(rng_seed)
-            np.random.seed(rng_seed)
-            torch.manual_seed(rng_seed)
-
-        # Set GPU use if desired. Only training uses the GPU.
-        if use_gpu and torch.cuda.is_available():
-            if rng_seed is not None:
-                torch.cuda.manual_seed(rng_seed)
-            device = torch.device("cuda")
-            print("Training on GPU \n")
-        else:
-            use_gpu = False
-            device = torch.device("cpu")
-            print("Training on CPU")
+        # if rng_seed is not None:
+        #     if verbose > 0:
+        #         print('Setting RNG seed to {}'.format(rng_seed))
+        #     random.seed(rng_seed)
+        #     np.random.seed(rng_seed)
+        #     torch.manual_seed(rng_seed)
 
         # Ensure X has proper dims
         n_samples = len(train_loader.dataset)
-        pixels = train_loader.dataset.pixels
         hparams = kwargs
-        self.input_channels = hparams['input_channels']
 
         # Set loss function and make required changes
-        if losstype == 'mserrall2':
+        if self.losstype == 'mserrall2':
             criterion = cnn_loss.MSErrLossAll2(alpha=hparams['alpha_loss'], 
-                            lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
+                            lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E']).cuda()
             val_criterion = cnn_loss.MSErrLossAll2(size_average=False, alpha=hparams['alpha_loss'], 
-                            lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E'])
+                            lambda_abs=hparams['lambda_abs'], lambda_E=hparams['lambda_E']).cuda()
             label_number = 5
-            hparams['outputtype'] = '5pos1err'
-        elif losstype == 'mserrall3':
-            criterion = cnn_loss.MSErrLossAll3()
-            val_criterion = cnn_loss.MSErrLossAll3(size_average=False,)
+        elif self.losstype == 'mserrall3':
+            criterion = cnn_loss.MSErrLossAll3().cuda()
+            val_criterion = cnn_loss.MSErrLossAll3(size_average=False,).cuda()
             label_number = 5
-            hparams['outputtype'] = '5pos4err'
-        elif losstype == 'energy':
-            criterion = cnn_loss.MSErrLoss()
-            val_criterion = cnn_loss.MSErrLoss(size_average=False)
+        elif self.losstype == 'energy':
+            criterion = cnn_loss.MSErrLoss().cuda()
+            val_criterion = cnn_loss.MSErrLoss(size_average=False).cuda()
             label_number = 1
-            hparams['outputtype'] = '1energy'
-        elif losstype == 'tailvpeak':
-            criterion = cnn_loss.BinaryLoss()
-            val_criterion = cnn_loss.BinaryLoss(size_average=False)
+        elif self.losstype == 'tailvpeak':
+            criterion = cnn_loss.BinaryLoss().cuda()
+            val_criterion = cnn_loss.BinaryLoss(size_average=False).cuda()
             label_number = 1
-            hparams['outputtype'] = '1ang'
-        elif losstype == 'tailvpeak2':
-            criterion = nn.CrossEntropyLoss()
-            val_criterion = nn.CrossEntropyLoss(size_average=False)
+        elif self.losstype == 'tailvpeak2':
+            criterion = nn.CrossEntropyLoss().cuda()
+            val_criterion = nn.CrossEntropyLoss(size_average=False).cuda()
             label_number = 1
-            hparams['outputtype'] = '3pos'
         else:
             raise ValueError('Loss type not recognized')
 
-        # Build net
-        self.net = TrackNet(pixels, hparams=hparams)
-        if torch.cuda.device_count() > 1:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")
-            # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
-            self.net = nn.DataParallel(self.net)
-        self.net.to(device)
-
-        if verbose > 0:
-            print('Built net')
-            print(self.net)
-
         # Build optimization method
         if optim_method == 'RLRP': #Cyclic learning rate with decaying amplitude
-            optimizer = optim.SGD(self.net.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, patience=11, min_lr=0.00001)
+            optimizer = optim.SGD(self.net.parameters(), lr=hparams['lr'], momentum=0.9, weight_decay=hparams['wd'])
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, patience=9, min_lr=0.00001)
         elif optim_method == 'mom': #Normal SGD momentum schedule but with initial rise to prevent loss divergence
-            optimizer = optim.SGD(self.net.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
+            optimizer = optim.SGD(self.net.parameters(), lr=hparams['lr'], momentum=0.9, weight_decay=hparams['wd'])
             def lr_lambda(ep):
                 if ep <= 10:
-                    L = 0.1 * ep
+                    L = 0.3 * ep
                 elif ep > 10 and ep <= 40:
                     L = 1
                 elif ep > 40 and ep <= 90:
@@ -280,21 +243,29 @@ class TrackAngleRegressor:
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda,)
         else:
             raise("ERROR: Optimizer not understood!")
+
         # Calculate n_steps from n_epochs
         n_steps = n_epochs * int(math.ceil(n_samples / batch_size))
+        # Added after model and optimizer construction
+        self.net = apex.parallel.convert_syncbn_model(self.net)
+        self.net, optimizer = amp.initialize(self.net, optimizer, opt_level=hparams['opt_level'])
+        if torch.cuda.device_count() > 1:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            # dim = 0 [30, xxx] -> [10, ...], [10, ...], [10, ...] on 3 GPUs
+            self.net = DDP(self.net, delay_allreduce=True)
         
+        best_val_loss = 100
+        print('Training for {} steps'.format(n_steps))
+        steps = []
+        losses = []
+        val_steps = []
+        val_losses = []
 
-        if verbose:
-           print('Training for {} steps'.format(n_steps))
-        if track_stats:
-           steps = []
-           losses = []
-           val_steps = []
-           val_losses = []
-           mod_factor = [10]
-           phi_0s = [10]
-        #ALP New and improved train
+        #Training loop
         for epoch in range(1,n_epochs + 1):
+            if torch.cuda.device_count() > 1:
+                train_sampler.set_epoch(epoch)
+
             self.net.train()
             cum_loss = 0
             cum_batch = 0
@@ -305,72 +276,70 @@ class TrackAngleRegressor:
                 if label_number == 1:
                    y_batch = y_batch.squeeze()
 
-                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-                optimizer.zero_grad()
+                X_batch, y_batch = X_batch.cuda(), y_batch.cuda()
                 y_hat_batch = self.net(X_batch)
                 loss = criterion(y_hat_batch, y_batch)
-                loss.backward()
+                optimizer.zero_grad()
+                # loss.backward() changed to:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
                 optimizer.step()
-                if (verbose > 0 or track_stats) and batch_idx % 100 == 0:
-                   losses.append(loss.item())
-                   cum_loss += loss.item(); cum_batch += 1
-                   steps.append(epoch * math.ceil(len(train_loader.dataset) / batch_size) + batch_idx)
-                   print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                   epoch, batch_idx * batch_size, len(train_loader.dataset),
-                   100. * batch_idx / len(train_loader), cum_loss / cum_batch))
+                
+                if batch_idx % 150 == 0:                        
+                    if torch.cuda.device_count() > 1:
+                        losses.append(reduce_tensor(loss.data, world_size).item())
+                        cum_loss += reduce_tensor(loss.data, world_size).item(); cum_batch += 1
+                    else:
+                        losses.append(loss.item())
+                        cum_loss += loss.item(); cum_batch += 1
+                    steps.append(epoch * math.ceil(len(train_loader.dataset) / batch_size) + batch_idx)
+                    torch.cuda.synchronize()
+                    
+                    if local_rank == 0:    
+                        print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                        epoch, batch_idx * batch_size, len(train_loader.dataset),
+                        100. * batch_idx / len(train_loader), cum_loss / cum_batch))
  
 
             #evaluate on validation set
-            if ((epoch-1) % 3 == 0):
-               self.net.eval()
-               val_loss = 0
-               val_acc = 0
-               with torch.no_grad():
+            if ((epoch-1) % 2 == 0):
+                self.net.eval()
+                val_loss = 0
+                val_acc = 0
+                with torch.no_grad():
                     for X_batch, y_batch in val_loader:
                         X_batch = X_batch.view([-1, self.input_channels, self.pixels, self.pixels])
                         y_batch = y_batch.view([-1,label_number]) 
                         if label_number == 1:
-                           y_batch = y_batch.squeeze()
+                            y_batch = y_batch.squeeze()
 
-                        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                        X_batch, y_batch = X_batch.cuda(), y_batch.cuda()
                         y_hat_batch = self.net(X_batch)
-                        val_loss += val_criterion(y_hat_batch, y_batch).item() # sum up batch loss
-                        if losstype == 'CE':
-                            val_acc += np.sum((np.argmax(y_hat_batch.data.cpu().numpy(), axis=1) == y_batch.data.cpu().numpy())*1)
-                        elif losstype == 'tailvpeak':
-                            val_acc += np.sum((np.where(np.squeeze(expit(y_hat_batch.data.cpu().numpy())) > 0.5, 1, 0) == y_batch.data.cpu().numpy())*1)
-                        elif losstype == 'tailvpeak2':
+                        if torch.cuda.device_count() > 1:
+                            val_loss += reduce_tensor(val_criterion(y_hat_batch, y_batch).data).item()
+                        else:
+                            val_loss += val_criterion(y_hat_batch, y_batch).item() # sum up batch loss
+
+                        if self.losstype == 'tailvpeak':
+                            val_acc += reduce_tensor(torch.eq(torch.gt(y_hat_batch.squeeze(),0), y_batch).sum().float().data).item()
+                        elif self.losstype == 'tailvpeak2':
                             val_acc += np.sum(np.argmax(y_hat_batch.data.cpu().numpy(),axis=-1) == y_batch.data.cpu().numpy() )
-               val_loss /= len(val_loader.dataset) #(y_batch.shape[0] / batch_size)
-               val_losses.append(val_loss)
-               val_steps.append(epoch * math.ceil(n_samples / batch_size) )
-               if losstype == 'CE' or losstype == 'tailvpeak' or losstype == 'tailvpeak2':
-                  val_acc /= len(val_loader.dataset)
-                  print('\n Validation Set Accuracy: {:.4f}\n'.format(val_acc))
-               print('\nValidation set - Average loss: {:.4f}\n'.format(val_loss))
 
-            if ((epoch-1) % 10 == 0 and any(losstype == L for L in ['cos','mserr','maerr','mserrall1','mserrall2']) and meas_loader):
-               self.net.eval()
-               mod = 0; phi0 = 0
-               C1 = 0; C2 = 0
-               with torch.no_grad():
-                    y_hats = self.predict(meas_loader)
+                val_loss /= len(val_loader.dataset)
+                val_losses.append(val_loss)
+                val_steps.append(epoch * math.ceil(n_samples / batch_size) )
 
-               N_elliptic = len(y_hats[0,:])
-               Q = sum(np.cos(2*y_hats[0,:])) / N_elliptic
-               U = sum(np.sin(2*y_hats[0,:])) / N_elliptic
-               
-               mod = 2*np.sqrt(Q**2 + U**2)
-               phi0 = np.arctan2(U,Q)/2 
-               
-               print("y_hat examples: ", y_hats[:20])
-               mod_factor.append(mod)
-               phi_0s.append(phi0)
-               print('\nMeasured set - Modulation Factor & Phi_0: {:.4f}, {:.4f}\n'.format(mod, phi0))
+                if local_rank == 0:
+                    if (self.losstype == 'tailvpeak' or self.losstype == 'tailvpeak2'):
+                        val_acc /= len(val_loader.dataset)
+                        print('\n Validation Set Accuracy: {:.4f}\n'.format(val_acc))
+                    print('\nValidation set - Average loss: {:.4f}\n'.format(val_loss))
 
-            if ( ((epoch-1) % 10 == 0 and epoch >= 10) ):
+            if (epoch % 10 == 0) and epoch >= 25 and local_rank == 0:
                 print('\n Saving checkpoint ' + "net_" + str(epoch) + ".ptmodel\n")
-                self.dump(checkpoint_dir + "/" + optim_method + "_" + str(batch_size) + "_" + str(epoch) + ".ptmodel") 
+                is_best = val_loss < best_val_loss
+                best_val_loss = min(val_loss, best_val_loss)
+                self.dump(checkpoint_dir + "/" + optim_method + "_" + str(batch_size) + "_" + str(epoch) + ".ptmodel", is_best) 
 
             if np.isnan(cum_loss): #check for loss divergence, don't waste gpu time
                 break
@@ -379,23 +348,11 @@ class TrackAngleRegressor:
             else:
                 scheduler.step() #checking for lr decay
             
-        if verbose > 0:
-            print('done training.')
+        print('done training.')
 
-        results = self._eval(train_loader, use_gpu=use_gpu)  # feed in 4d X and 2d y for losstype=cos, 1d y for losstype!=cos
+        results = self._eval(train_loader, use_gpu=use_gpu) 
 
-        if track_stats:
-            stats = {
-                'step': steps,
-                'loss': losses,
-                'val_step': val_steps,
-                'val_loss': val_losses,
-                'mod_factor': mod_factor,
-                'phi0': phi_0s,
-            }
-            return results, stats
-        else:
-            return results
+        return results
 
     def test(self, data_loader, y_exists=True, use_gpu=True, output_all=False, output_vals=()):
         """Run inference on provided data and compare to expected results. Supports a variety of outputs."""
@@ -405,23 +362,13 @@ class TrackAngleRegressor:
         """Run inference on provided data, outputting just the predicted angles"""
         metrics = self._eval(data_loader, y_exists=False, use_gpu=use_gpu, one_batch=False, output_all=True, output_vals=output_vals)
         return metrics['y_hat_angles']
-    
-    def save_checkpoint(self, epoch):
-        """Save net during training"""
-        net = self.net.cpu()
-        torch.save(
-            net.state_dict(),
-            str(net.__class__.__name__) + "_" + str(epoch) + ".ptmodel",
-        )
 
-    def load(self, filename):
-        self.net.load_state_dict(torch.load(filename))
-
-    def dump(self, model_file):
-        if torch.cuda.device_count() > 1:
-            torch.save(self.net.module, model_file)
+    def dump(self, model_file, is_best):
+        if is_best:
+            torch.save(self.net.module.state_dict(), model_file + "B")
         else:
-            torch.save(self.net, model_file)
+            torch.save(self.net.module.state_dict(), model_file)
+
 
     def _drop_eval(self,m):
         if type(m) == nn.Dropout:
@@ -441,28 +388,25 @@ class TrackAngleRegressor:
             mse: float, mean squared angle error
             metrics: dict of metrics
         """
+        output_type = self.net.outputtype
         if torch.cuda.device_count() > 1:
-            output_type = self.net.module.outputtype  # different behavior depending on net output type
-        else:
-            output_type = self.net.outputtype
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            self.net = nn.DataParallel(self.net)
 
         self.net.eval()
 
         if use_gpu and torch.cuda.is_available():
            device = torch.device("cuda")
+           torch.cuda.empty_cache()
            print("Evaluating on GPU \n")
+           self.net.cuda()
         else:
            use_gpu = False
            device = torch.device("cpu")
            print("Evaluating on CPU \n")
-
+           
         n_samples = len(data_loader.dataset)
         y_hats = np.array([],dtype=np.float32)
-            
-        if output_all and len(output_vals) > 0:
-            x_alls = {}
-            for val in output_vals:
-                x_alls[val] = []
 
         with torch.no_grad():
             for batch_idx, X_batch in enumerate(data_loader):
@@ -472,10 +416,8 @@ class TrackAngleRegressor:
                 y_hat_batch = self.net(X_batch).cpu().data.numpy()
                 y_hats = np.append(y_hats, y_hat_batch)
 
-                if output_all and len(output_vals) > 0:
-                    x_all = self.net.forward_all(X_batch)
-                    for val in output_vals:
-                        x_alls[val].append(x_all[val].cpu().data.numpy())
+                if batch_idx % 100 == 0:
+                    print("{} of {} reconstructed.".format(int(batch_idx * X_batch.shape[0] / 3), n_samples))
 
  
         if output_type == '1ang':
@@ -510,3 +452,9 @@ class TrackAngleRegressor:
                 metrics[val] = np.concatenate(x_alls[val], axis=0)
 
         return metrics
+
+def reduce_tensor(tensor, world_size=1):
+    rt = tensor.clone()
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
+    rt /= world_size
+    return rt

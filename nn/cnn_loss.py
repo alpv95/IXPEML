@@ -14,11 +14,10 @@ class BinaryLoss(nn.Module):
     """
     def __init__(self, size_average=True, reduce=True,):
         super(BinaryLoss, self).__init__()
-        self.bceloss = nn.BCELoss(size_average=size_average, reduce=reduce)
-        self.sig = nn.Sigmoid()
+        self.bceloss = nn.BCEWithLogitsLoss(size_average=size_average, reduce=reduce)
 
     def forward(self, input, target):
-        return self.bceloss(self.sig(input)[:,0], target,)
+        return self.bceloss(input[:,0], target,)
 
 class MSErrLoss(nn.Module):
     """
@@ -100,6 +99,7 @@ class MSErrLossAll3(nn.Module):
     alpha parameter controls ratio between pi and 2pi PE angle vector loss.
     """
     besseli0 = I0()
+    besseli0_2 = I0()
 
     def __init__(self, size_average=True, reduce=True,):
         super(MSErrLossAll3, self).__init__()
@@ -113,7 +113,7 @@ class MSErrLossAll3(nn.Module):
         loss = - torch.exp(-input[:,6]) * (norm[:,0]*target[:,0] + norm[:,1]*target[:,1]) \
               - torch.exp(-input[:,2]) * ( (norm[:,0]**2 - norm[:,1]**2) * (target[:,0]**2 - target[:,1]**2) + 2*norm[:,0]*norm[:,1] * 2*target[:,0]*target[:,1] ) \
               + 0.5 * torch.exp(-input[:,7]) * ((input[:,3:5] - abs_pt)**2).sum(1) + 0.5 * torch.exp(-input[:,8]) *  (input[:,5] - energy)**2 \
-              + torch.log(self.besseli0(torch.exp(-input[:,2])) * self.besseli0(torch.exp(-input[:,6])) ) + 0.5 * input[:,7] + 0.5 * input[:,8]
+              + torch.log(self.besseli0(torch.exp(-input[:,2])) )  + torch.log(self.besseli0_2(torch.exp(-input[:,6])) ) + 0.5 * input[:,7] + 0.5 * input[:,8]
 
         if self.reduce:
             if self.size_average:

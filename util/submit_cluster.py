@@ -1,18 +1,4 @@
 # Simple Python API for submitting job arrays to the cluster
-# Works similarly to the Matlab submitCluster.m
-# Notes:
-#   This only works for Python 3 right now
-#   Function inputs and outputs are packed using msgpack (and msgpack-numpy) right now. This imposes some limitations on
-#       what can be packed, but is safer/cleaner/more compatible between Python vers.
-#       An alternative is to use pickle for this.
-# See Torque options at: http://docs.adaptivecomputing.com/torque/4-1-3/Content/topics/2-jobs/requestingRes.htm
-#
-# Note: To test c3ddb, it may be useful to get an interactive session on a node:
-# srun --pty --mem 16000 -p sched_mem1TB -t 1:00:00 /bin/bash
-# srun --pty --mem 16000 --gres=gpu:1 -p sched_mem1TB -t 1:00:00 /bin/bash
-
-#Now edited by ALP, Kevin version runs from local for MIT clusters, ALP version runs from cluster on cluster - Sherlock $GROUP_HOME
-
 
 import os
 import getpass
@@ -47,7 +33,7 @@ resources = {
 #    }
     'sherlock': {
         'queue_manager': 'slurm',
-        'default_queue': 'owners',
+        'default_queue': 'gpu',
 #        'default_env': 'source /scratch/users/kshi/programs/anaconda3/bin/activate default-env',
         'is_remote': False,
     }
@@ -269,16 +255,23 @@ def submit(function, module, inputs,
 import sys
 sys.path.extend({run_path})
 import pickle
+import argparse
 from {run_module} import {run_function}
 
-i = sys.argv[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("index", type=int)
+parser.add_argument("--local_rank", type=int, default=0)
+parser.add_argument("--nworkers", type=int, default=2)
+args = parser.parse_args()
+
+i = args.index
 input_file = 'input{{i}}'.format(i=i)
 output_file = 'output{{i}}'.format(i=i)
 
 with open(input_file, 'rb') as f:
     inputs = pickle.load(f)
 
-outputs = {run_function}(*inputs)
+outputs = {run_function}(*inputs, local_rank=args.local_rank, nworkers=args.nworkers)
 
 with open(output_file, 'wb') as f:
     pickle.dump(outputs, f)
@@ -310,21 +303,28 @@ python run_file.py $PBS_ARRAYID
 #SBATCH --partition={queue}
 #SBATCH --nodes=1
 #SBATCH --ntasks={proc}
-#SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu={mem}M
+#SBATCH --mem={mem}M
 #SBATCH --time={time}
+#SBATCH --cpus-per-task=2
 #SBATCH --job-name={name}
 #SBATCH --array=1-{n_jobs}{max_concurrent_str}
 {gpu_str}
+#SBATCH -C GPU_BRD:GEFORCE
+#SBATCH -C GPU_SKU:RTX_2080Ti
+#SBATCH -C GPU_CC:7.5
 
-module load python/3.6.1
-module load py-numpy/1.14.3_py36
-##module load py-pytorch/1.0.0_py36
-module load viz
-module load py-matplotlib/2.1.2_py36
+##export NCCL_DEBUG=INFO
+ml python/3.9
+ml py-scipy/1.6.3_py39
+ml py-numpy/1.20.3_py39
+ml cudnn/8.1.1.33
+ml py-pytorch/1.8.1_py39
+ml cuda/11.1.1
+export NGPU=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 
+nvidia-smi
 cd {working_dir}
-python3 run_file.py $SLURM_ARRAY_TASK_ID
+python3 -m torch.distributed.launch --nproc_per_node=$NGPU --master_port=8375 run_file.py $SLURM_ARRAY_TASK_ID --nworkers $NGPU
 """.format(**job_opts))
 #SBATCH --partition={queue}
 

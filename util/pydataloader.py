@@ -25,7 +25,9 @@ class H5Dataset(Dataset):
         self.mom_phis = data_all["mom_phis"]
         self.xy_abs_pts = data_all["xy_abs"]
         self.mom_abs_pts = torch.mean(data_all["mom_abs"], axis=2) / self.pixels
+        self.flags = data_all["flag"]
         self.length = len(self.tracks_cube)
+        print("Dataset: ", self.dir)
         print("Dataset size: ", self.length)
         
         if datatype =='sim':
@@ -39,7 +41,7 @@ class H5Dataset(Dataset):
             else:
                 raise("No energy calibration!")
 
-            if (losstype == "mserrall1" or losstype == "mserrall2" or losstype == "mserrall3"):
+            if (losstype == "mserrall2" or losstype == "mserrall3"):
                 self.Y = torch.stack((torch.cos(self.angles),torch.sin(self.angles),self.abs_pts[:,:,0], 
                                 self.abs_pts[:,:,1], self.energy),2).float() #[batch_size, augment, 5] 
             elif (losstype == "energy"):
@@ -51,7 +53,6 @@ class H5Dataset(Dataset):
                 self.Y[torch.gt(self.zs, 10.83)] = torch.tensor(2, dtype=torch.long)
         else:
             self.trgs = data_all["trg_id"]
-            self.flags = data_all["flag"]
             self.Y = None
     
     def __getitem__(self, index):
@@ -59,7 +60,7 @@ class H5Dataset(Dataset):
         if sparse.shape[0] == 1:
             track = torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
                                 torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
-        else:
+        elif sparse.shape[0] == 3:
             track = torch.stack([
                 torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
                                 torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
@@ -68,18 +69,6 @@ class H5Dataset(Dataset):
                 torch.stack([torch.sparse.FloatTensor(sparse[2,0,:2,:].long(), sparse[2,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
                                 torch.sparse.FloatTensor(sparse[2,1,:2,:].long(), sparse[2,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
             ])
-        sample = (track.float(), self.Y[index])
-        return sample
-        
-    def __len__(self):
-        return self.length
-
-class H5DatasetEval(H5Dataset):
-    def __getitem__(self, index):
-        sparse = self.tracks_cube[index]
-        if sparse.shape[0] == 1:
-            track = torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
-                                torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
         else:
             track = torch.stack([
                 torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
@@ -87,7 +76,53 @@ class H5DatasetEval(H5Dataset):
                 torch.stack([torch.sparse.FloatTensor(sparse[1,0,:2,:].long(), sparse[1,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
                                 torch.sparse.FloatTensor(sparse[1,1,:2,:].long(), sparse[1,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
                 torch.stack([torch.sparse.FloatTensor(sparse[2,0,:2,:].long(), sparse[2,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[2,1,:2,:].long(), sparse[2,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[3,0,:2,:].long(), sparse[3,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[3,1,:2,:].long(), sparse[3,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[4,0,:2,:].long(), sparse[4,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[4,1,:2,:].long(), sparse[4,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[5,0,:2,:].long(), sparse[5,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[5,1,:2,:].long(), sparse[5,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+            ])
+        sample = (track.float(), self.Y[index])
+        return sample
+        
+    def __len__(self):
+        return self.length
+
+class H5DatasetEval(H5Dataset):
+    def __init__(self, dirr, datatype='sim' ,losstype='ang', energy_cal=None, transform=None, augment=3):
+        super().__init__(dirr, datatype, losstype, energy_cal, transform)
+        self.aug = augment
+
+    def __getitem__(self, index):
+        sparse = self.tracks_cube[index]
+        if self.aug == 1:
+            track = torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
+        elif self.aug == 3:
+            track = torch.stack([
+                torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[1,0,:2,:].long(), sparse[1,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[1,1,:2,:].long(), sparse[1,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[2,0,:2,:].long(), sparse[2,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
                                 torch.sparse.FloatTensor(sparse[2,1,:2,:].long(), sparse[2,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()])
+            ])
+        else:
+            track = torch.stack([
+                torch.stack([torch.sparse.FloatTensor(sparse[0,0,:2,:].long(), sparse[0,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[0,1,:2,:].long(), sparse[0,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[1,0,:2,:].long(), sparse[1,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[1,1,:2,:].long(), sparse[1,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[2,0,:2,:].long(), sparse[2,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[2,1,:2,:].long(), sparse[2,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[3,0,:2,:].long(), sparse[3,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[3,1,:2,:].long(), sparse[3,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[4,0,:2,:].long(), sparse[4,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[4,1,:2,:].long(), sparse[4,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
+                torch.stack([torch.sparse.FloatTensor(sparse[5,0,:2,:].long(), sparse[5,0,2,:], torch.Size([self.pixels,self.pixels])).to_dense(), 
+                                torch.sparse.FloatTensor(sparse[5,1,:2,:].long(), sparse[5,1,2,:], torch.Size([self.pixels,self.pixels])).to_dense()]),
             ])
         sample = track.float()
         return sample

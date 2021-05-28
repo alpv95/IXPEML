@@ -18,23 +18,26 @@ from util.methods import *
 class NetTest(object):
     """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    model_base = os.path.join(base, "net_archive", "")
-    data_base =  base #os.path.join(base, "data","")
+    model_base = os.path.join(base, "data/nn", "")
+    data_base =  os.path.join(base, "data","")
     save_base =  base 
 
     def __init__(self, nets=[], datasets=[], n_nets=1, datatype="sim",
-                save_table=None, input_channels=2, stokes_correct=None):
+                save_table=None, input_channels=2, stokes_correct=None, batch_size=2048, 
+                nworkers=1):
  
         self.nets = [os.path.join(self.model_base,net) for net in nets]
         self.datasets = [os.path.join(self.data_base,data) for data in datasets]
         self.datatype = datatype
         self.n_nets = n_nets
+        self.batch = batch_size
+        self.nworkers = nworkers
         self.save_table = save_table
         self.input_channels = input_channels
         self.stokes_correct = stokes_correct
 
 
-    def _predict(self, net, dataset,): #base single net on single dataset prediction
+    def _predict(self, net, dataset, augment=3): #base single net on single dataset prediction
         '''
         Predicts NN track angles with NN 'net' on 'dataset'.
         Requires GPU for fast computation.
@@ -42,36 +45,35 @@ class NetTest(object):
         datatype = self.datatype
         up2 = lambda p: os.path.dirname(os.path.dirname(p))
 
-        with h5py.File(os.path.join(up2(net), 'opts.h5'),'r') as f:
-             batch_size = 2048 #Can be adjusted if there are memory GPU memory problems during prediction
-             self.losstype = f['root']['hparams']['losstype'][()].decode("utf-8")
+        if "peakonly" in net:
+            self.losstype = 'mserrall3'
+            batch_factor = 1
+        elif "tailvpeak" in net:
+            self.losstype = 'tailvpeak'
+            batch_factor = 2
         
         mean, std = torch.load(os.path.join(up2(net),"ZN.pt"))
         meanE, stdE = torch.load(os.path.join(up2(net),"ZNE.pt"))
 
         dataset = H5DatasetEval(dataset, datatype=datatype, losstype=self.losstype, energy_cal=(meanE, stdE),
-                                    transform=transforms.Compose([ZNormalize(mean=mean,std=std)]))
+                                    augment=augment, transform=transforms.Compose([ZNormalize(mean=mean,std=std)]))
 
-        kwargs = {'num_workers': 4, 'pin_memory': True}
-        test_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, **kwargs)
+        kwargs = {'num_workers': self.nworkers, 'pin_memory': True}
+        test_loader = torch.utils.data.DataLoader(dataset, batch_size=self.batch*batch_factor, shuffle=False, **kwargs)
            
-        m = TrackAngleRegressor(load_checkpoint=net, input_channels=self.input_channels)
+        m = TrackAngleRegressor(self.losstype, load_checkpoint=net,)
 
         y_hats = m.predict(test_loader)
         angles_mom = (dataset.mom_phis).numpy()
         mom_abs_pts = np.reshape( (dataset.mom_abs_pts).numpy(), (-1,2), order="C")
         p_tail = [None]
-        if y_hats.shape[0] >= 5:
+        if self.losstype == 'mserrall3':
             errors = y_hats[1,:]
             abs_pts = np.transpose(y_hats[2:4,:])
             energies = y_hats[4,:]
             angles = y_hats[0,:]
         else:
-            print('TAILVPEAK')
-            if self.losstype == 'energy':
-                p_tail = y_hats * stdE.item() + meanE.item()
-            else:
-                p_tail = y_hats
+            p_tail = y_hats
             angles = [None]
             errors = [None]
             abs_pts = [None]
@@ -92,7 +94,7 @@ class NetTest(object):
             energies_sim = (dataset.energy).numpy()
             energies_sim = np.ndarray.flatten( energies_sim, "C" )
             trgs = [None]
-            flags = [None] 
+            flags = dataset.flags.numpy() 
         else:
             trgs = dataset.trgs.numpy()
             flags = dataset.flags.numpy()
@@ -159,19 +161,27 @@ class NetTest(object):
         for data in self.datasets:
             name = data.replace(self.data_base,"") + "__" + "ensemble"
             results = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
-            for i, net in enumerate(self.nets):
-                print(">> NN {}/{} : \n".format(i+1,len(self.nets)))
-                results = tuple(map( np.append, results, self._predict(net, data,) ))
+            for i, net in enumerate(self.nets[:1]):
+                print(">> Angular NN {}/{} : \n".format(i+1,len(self.nets[:1])))
+                results = tuple(map( np.append, results, self._predict(net, data, augment=6) ))
                 print(">> Complete")
             if self.stokes_correct:
                 results = self.stokes_correction(results)
-
             #Post processing for rotations and reducing repeated moments outputs
-            results = post_rotate(results, self.n_nets, aug=3, datatype=self.datatype, losstype=self.losstype)
+            results = post_rotate(results, len(self.nets[:1]), aug=6, datatype=self.datatype, losstype=self.losstype)
+
+            results_ptail = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
+            for i, net in enumerate(self.nets[1:]):
+                print(">> Ptail NN {}/{} : \n".format(i+1,len(self.nets[1:])))
+                results_ptail = tuple(map( np.append, results_ptail, self._predict(net, data, augment=3) ))
+                print(">> Complete")
+
+            p_tail = triple_angle_reshape(results_ptail[-2], len(self.nets[1:]), augment=3)
+            p_tail = np.mean(p_tail, axis=(1,2))
  
             if self.save_table is not None:
                 name = data.replace(self.data_base,"") + "__" + self.save_table + "__" + "ensemble"
-                fits_save(results, os.path.join(self.save_base, name.replace("/","_")), self.datatype, self.losstype)
+                fits_save(results, p_tail, os.path.join(self.save_base, name.replace("/","_")), self.datatype, self.losstype)
                 print("Saved to: {}".format(os.path.join(self.save_base, name.replace("/","_") + ".fits"))) 
 
 
