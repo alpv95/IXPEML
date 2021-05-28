@@ -104,9 +104,13 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
     mom_phi = hex_track['DETPHI']
     mom_abs_pt = np.array([hex_track['DETX'],hex_track['DETY']])
 
-    if xs.size == 0 and not sim:
+    if xs.size == 0:
+        print("bad_track:", xs, ys, Qs)
         flag = 1
-        return (tracks_cube, mom_phi, mom_abs_pts_sq, flag)
+        if sim:
+            return tracks_cube, angles_sq, abs_pts_sq, mom_phis_sq, mom_abs_pts_sq, flag
+        else:
+            return (tracks_cube, mom_phi, mom_abs_pts_sq, flag)
 
     if sim:
         abs_pt = np.array([hex_track_mc['ABS_X'],hex_track_mc['ABS_Y']])
@@ -117,12 +121,13 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
     r = np.sqrt((xs[0]-xs[adj])**2 + (ys[0]-ys[adj])**2) / 2
     a = r / np.cos(30*np.pi/180)
 
-    if augment > 1:
+    n_flip = -1
+    if augment == 3:
         n_rots = np.array([0,2,4])
-        n_flip = -1 #np.random.randint(0,12)
+    elif augment == 6:
+        n_rots = np.array([0,1,2,3,4,5])
     else:
         n_rots = [0]
-        n_flip = -1
 
     for k in range(augment):
         n_rot = n_rots[k]
@@ -191,7 +196,7 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
                 tracks_cube[k, 1, :, :] = np.stack([*indices,values])#Q_square
 
     if sim:
-        return tracks_cube, angles_sq, abs_pts_sq, mom_phis_sq, mom_abs_pts_sq
+        return tracks_cube, angles_sq, abs_pts_sq, mom_phis_sq, mom_abs_pts_sq, flag
     else:
         return tracks_cube, mom_phi, mom_abs_pts_sq, flag  
 
@@ -200,6 +205,7 @@ def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift
     """ Applied hex2square transformation to set of hexagonal tracks. Output depends on whether
     tracks are simulated or measured (real).
     """
+    print("\n Beginning hex -> square conversion \n")
     if isinstance(hex_tracks, tuple):
         assert n_final is not None
         assert n_final <= len(hex_tracks[0]['DETPHI'][cut])
@@ -210,25 +216,32 @@ def hex2square(hex_tracks, cut=None, n_final=None, augment=3, n_pixels=50, shift
             if cut[i]:
                 results[j] = hex2square_sub(hex_tracks[0][i], hex_tracks[1][i], augment=augment)
                 j += 1
+                if (j % int(n_final/20) == 0):
+                    print("{} of {} tracks constructed.".format(j, n_final))
             i += 1 
 
-        tracks_cum, angles_cum, abs_pts_cum, mom_phi_cum, mom_abs_pts_cum = zip(*results)
+        tracks_cum, angles_cum, abs_pts_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum = zip(*results)
         angles_cum = torch.from_numpy(np.array(angles_cum).astype(np.float))
         abs_pts_cum = torch.from_numpy(np.array(abs_pts_cum).astype(np.float))
         mom_phi_cum = torch.from_numpy(np.array(mom_phi_cum).astype(np.float))
         mom_abs_pts_cum = torch.from_numpy(np.array(mom_abs_pts_cum).astype(np.float))
         print("Final size: ", mom_phi_cum.shape)
+        print("Flagged {} tracks.".format(int(np.sum(flag_cum))))
+        flag_cum = torch.from_numpy(np.array(flag_cum).astype(np.int16))
         print("Finished \n")
-        return tracks_cum, angles_cum, mom_phi_cum, abs_pts_cum, mom_abs_pts_cum
+        return tracks_cum, angles_cum, mom_phi_cum, abs_pts_cum, mom_abs_pts_cum, flag_cum
     else:
         results = [None] * len(hex_tracks)
         for i, hex_track in enumerate(hex_tracks):
             results[i] = hex2square_sub(hex_track, augment=augment)
+            if (i % int(len(hex_tracks)/20) == 0):
+                print("{} of {} tracks constructed.".format(i, len(hex_tracks)))
 
         tracks_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum = zip(*results)
         mom_phi_cum = torch.from_numpy(np.array(mom_phi_cum).astype(np.float))
         mom_abs_pts_cum = torch.from_numpy(np.array(mom_abs_pts_cum).astype(np.float))
-        flag_cum = torch.from_numpy(np.array(flag_cum).astype(np.int16))
         print("Final size: ", mom_phi_cum.shape)
+        print("Flagged {} tracks.".format(int(np.sum(flag_cum))))
+        flag_cum = torch.from_numpy(np.array(flag_cum).astype(np.int16))
         print("Finished \n")
         return tracks_cum, mom_phi_cum, mom_abs_pts_cum, flag_cum

@@ -21,7 +21,7 @@ parser.add_argument('input_file', type=str,
                     help='input folder or file')
 parser.add_argument('out_base', type=str,
                     help='output folder')
-parser.add_argument('--augment', type=int, choices=[1,3], default=3,
+parser.add_argument('--augment', type=int, choices=[1,3,6], default=3,
                     help='Number of Track augmentation randomly distributed in dataset. These should always be 3 during inference and 1 during training')
 parser.add_argument('--npix', type=int, choices=[30, 50], default=50,
                     help='Number of pixels in square conversions. This should be 50 for >= v1.2')  
@@ -56,19 +56,19 @@ class builder(object):
 
         self.build_result = {"tracks": [], "mom_phis": torch.zeros( (self.total, self.augment) ), "moms": torch.zeros( self.total, self.augment ),
                              "mom_abs": torch.zeros( (self.total, self.augment, self.shift, 2) ), "xy_abs": torch.zeros( (self.total, 2) ), 
-                             "mom_energy": torch.zeros( self.total)}
+                             "mom_energy": torch.zeros( self.total), "flag": torch.zeros( self.total, dtype=torch.int16) }
 
     def init_build(self, input_file,):
         try:
             with fits.open(input_file.replace("_recon","_mc"), memmap=True) as hdu:
                 data_mc = hdu['MONTE_CARLO'].data
-            with fits.open(input_file, memmap=False) as hdu:
+            with fits.open(input_file, memmap=True) as hdu:
                 data_events = hdu['EVENTS'].data
             assert 'DETPHI' in [c.name for c in data_events.columns], "Need *_recon.fits not *.fits as the measured input file"
             data = (data_events,data_mc)    
         except FileNotFoundError:
             print("No Monte Carlo, measured data only \n")
-            with fits.open(input_file, memmap=False) as hdu:
+            with fits.open(input_file, memmap=True) as hdu:
                 data = hdu['EVENTS'].data
             assert 'DETPHI' in [c.name for c in data.columns], "Need *_recon.fits not *.fits as the measured input file"
 
@@ -145,7 +145,7 @@ class simulated(builder):
             print(len(fits_data[0]['DETPHI'][cut]), "post cut")
             assert len(fits_data[0]['DETPHI'][cut]) >= n_train_final, "Too few tracks {}, N_final {} too large.".format(len(fits_data[0]['DETPHI'][cut]), n_train_final)
 
-            tracks, angles, mom_phis, abs_pts, mom_abs_pts = hex2square(fits_data, cut=cut, n_final=n_train_final, augment=self.augment)
+            tracks, angles, mom_phis, abs_pts, mom_abs_pts, flags = hex2square(fits_data, cut=cut, n_final=n_train_final, augment=self.augment)
 
             self.build_result["tracks"].extend(tracks)
             self.build_result["angles"][cur_idx : (cur_idx + n_train_final)] = angles
@@ -157,6 +157,7 @@ class simulated(builder):
             self.build_result["energy"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(fits_data[1]['ENERGY'][cut][:n_train_final].astype(np.float32)).repeat(self.augment,1).T
             self.build_result["xy_abs"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(np.column_stack((fits_data[0]['DETX'][cut][:n_train_final],fits_data[0]['DETY'][cut][:n_train_final])))
             self.build_result["z"][cur_idx : (cur_idx + n_train_final)] = torch.from_numpy(fits_data[1]['ABS_Z'][cut][:n_train_final].astype(np.float32))
+            self.build_result["flag"][cur_idx : (cur_idx + n_train_final)] = flags
 
             cur_idx += n_train_final
 
@@ -185,7 +186,6 @@ class measured(builder):
         self.out_files = [self.out_base]
 
         self.build_result.update([("trg_id", torch.zeros( self.total, dtype=torch.int32 ))])
-        self.build_result.update([("flag", torch.zeros( self.total, dtype=torch.int32 ))])  
 
     def build(self,):
         fits_data = super().init_build(self.in_file,)
@@ -207,7 +207,7 @@ class measured(builder):
 
 def main():
     meas_split = (1, 0) #should sum to 1
-    sim_split = (0.96, 0.025, 0.015)
+    sim_split = (0.95, 0.025, 0.025)
 
     if not args.sim:
         #get total number of tracks
