@@ -21,7 +21,7 @@ parser.add_argument('input_file', type=str,
                     help='input folder or file')
 parser.add_argument('out_base', type=str,
                     help='output folder')
-parser.add_argument('--augment', type=int, choices=[1,3,6], default=3,
+parser.add_argument('--augment', type=int, choices=[1,3,6], default=6,
                     help='Number of Track augmentation randomly distributed in dataset. These should always be 3 during inference and 1 during training')
 parser.add_argument('--npix', type=int, choices=[30, 50], default=50,
                     help='Number of pixels in square conversions. This should be 50 for >= v1.2')  

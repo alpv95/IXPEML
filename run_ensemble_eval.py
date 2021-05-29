@@ -10,11 +10,7 @@ from util.definitions import ensembles
 parser = argparse.ArgumentParser()
 parser.add_argument('save_name', type=str,
                     help='Save Net FoV results in Pandas dataframe with this name')
-parser.add_argument('--ensemble', type=str, default="bessel_rand",
-                    help='Which network ensemble to use: Ensemble prediction or single prediction') #choices=["bessel_rand","bessel_rand_small","heads_only","tailvpeak","energy", "flat_weight","heads_only_new","heads_only_newO1","tailvpeak_newO1"],
 parser.add_argument('--data_list', type=str, nargs='+',
-                    help='List of Data to evaluate on')
-parser.add_argument('--local_rank', type=int,
                     help='List of Data to evaluate on')
 parser.add_argument('--batch_size', type=int, default=2048,
                     help='Batch size to use for NN evaluation, lower if out of memory error. Maximum possible size should be used to maximize speed.')
@@ -28,9 +24,9 @@ args = parser.parse_args()
 
 
 def main():
-    net_list = ensembles[args.ensemble]
+    net_list = ensembles['heads_only_new']
 
-    print("Evaluating using ensemble: \n", net_list)
+    print("Evaluating using ensemble: \n", "v2.0")
     print("\n {} NNs in the ensemble \n".format(len(net_list)))
 
     t = NetTest(nets=net_list, datasets=args.data_list, n_nets=len(net_list), datatype=args.datatype,

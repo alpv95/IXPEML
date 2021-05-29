@@ -17,12 +17,6 @@ from nn.cnn import TrackAngleRegressor
 from torchvision import transforms
 import argparse
 
-# def parse():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("--local_rank", type=int, default=0)
-#     args = parser.parse_args()
-#     return args
-
 def main():
     Spec = namedtuple('Spec', ['name', 'data_file', 'loss', 'opt_level', 'alpha_loss','lambda_abs','lambda_E','optim_method',
                         'input_channels','n_multistarts', 'n_multistarts_per_job','n_threads', 'subset'])
@@ -48,104 +42,6 @@ def main():
     layer_combos = list(itertools.product(layer_sizes, repeat=2))
     # Make sure all architectures are "pyramidal"
     layer_combos_keep = [layer for layer in layer_combos if check_pyramidal(layer)]
-
-    # hparams = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.0015, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 1024, #[64],
-    #     'optim_method': job.optim_method,
-    #     'opt_level': job.opt_level,
-    #     'alpha_loss': job.alpha_loss,
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams2 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.0015, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 2048, #[64],
-    #     'optim_method': job.optim_method,
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams3 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.0015, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 1024, #[64],
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'optim_method': job.optim_method,
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams4 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 256, #[64],
-    #     'optim_method': "mom",
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams6 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 2048, #[64],
-    #     'optim_method': "mom",
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams7 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 1024, #[64],
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'optim_method': "mom",
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams8 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 512, #[64],
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'optim_method': "mom",
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-    # hparams9 = {  # Smaller test set values
-    #     'losstype': job.loss, #[job.loss],
-    #     'lr': 0.002, #[8e-5, 8e-5, 8e-5],
-    #     'wd': 5e-5, #[5e-5],
-    #     'batch_size': 512, #[64],
-    #     'lambda_abs': job.lambda_abs,
-    #     'lambda_E': job.lambda_E,
-    #     'opt_level': job.opt_level,
-    #     'optim_method': "RLRP",
-    #     'alpha_loss': job.alpha_loss,
-    #     'n_epochs': 171, #[50]
-    # } 
-
 
     hparams = {  # Smaller test set values
         'losstype': job.loss, #[job.loss],
