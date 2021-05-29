@@ -105,7 +105,6 @@ def hex2square_sub(hex_track, hex_track_mc=None, n_pixels=50, augment=3, shift=2
     mom_abs_pt = np.array([hex_track['DETX'],hex_track['DETY']])
 
     if xs.size == 0:
-        print("bad_track:", xs, ys, Qs)
         flag = 1
         if sim:
             return tracks_cube, angles_sq, abs_pts_sq, mom_phis_sq, mom_abs_pts_sq, flag

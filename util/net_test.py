@@ -18,7 +18,7 @@ from util.methods import *
 class NetTest(object):
     """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    model_base = os.path.join(base, "data/nn", "")
+    model_base = os.path.join(base, "net_archive", "")
     data_base =  os.path.join(base, "data","")
     save_base =  base 
 
@@ -161,22 +161,22 @@ class NetTest(object):
         for data in self.datasets:
             name = data.replace(self.data_base,"") + "__" + "ensemble"
             results = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
-            for i, net in enumerate(self.nets[:1]):
-                print(">> Angular NN {}/{} : \n".format(i+1,len(self.nets[:1])))
+            for i, net in enumerate(self.nets[:3]):
+                print(">> Angular NN {}/{} : \n".format(i+1,len(self.nets[:3])))
                 results = tuple(map( np.append, results, self._predict(net, data, augment=6) ))
                 print(">> Complete")
             if self.stokes_correct:
                 results = self.stokes_correction(results)
             #Post processing for rotations and reducing repeated moments outputs
-            results = post_rotate(results, len(self.nets[:1]), aug=6, datatype=self.datatype, losstype=self.losstype)
+            results = post_rotate(results, len(self.nets[:3]), aug=6, datatype=self.datatype, losstype=self.losstype)
 
             results_ptail = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
-            for i, net in enumerate(self.nets[1:]):
-                print(">> Ptail NN {}/{} : \n".format(i+1,len(self.nets[1:])))
+            for i, net in enumerate(self.nets[3:]):
+                print(">> Ptail NN {}/{} : \n".format(i+1,len(self.nets[3:])))
                 results_ptail = tuple(map( np.append, results_ptail, self._predict(net, data, augment=3) ))
                 print(">> Complete")
 
-            p_tail = triple_angle_reshape(results_ptail[-2], len(self.nets[1:]), augment=3)
+            p_tail = triple_angle_reshape(results_ptail[-2], len(self.nets[3:]), augment=3)
             p_tail = np.mean(p_tail, axis=(1,2))
  
             if self.save_table is not None:

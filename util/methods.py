@@ -491,7 +491,7 @@ def error_combine_gauss(ang, sigma):
     return 1 / np.mean(sigma**2,axis=(1,2)), weight_epistemic #optimal weight
 
 def pi_ambiguity_mean(ang, weight):
-    '''Mean track angle from ensemble [-pi,pi]'''
+    '''Mean track angle from ensemble [-pi,pi]. Voting algorithm for principal axis direction.'''
     vote = np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2))
     pi_fix = np.random.randint(2, size=vote.shape) * np.pi
     pi_fix[vote > 0.5] = np.pi
@@ -568,16 +568,16 @@ def fits_save(results, p_tail, file, datatype, losstype='mserr1'):
     c11 = fits.Column(name='NN_ENERGY', array=energies, format='E')
     c12 = fits.Column(name='XY_NN_ABS', array=square2hex_abs(abs_pts, mom_abs_pts, xy_abs_pts), format='2E', dim='(2)')
     c17 = fits.Column(name='P_TAIL', array=p_tail, format='E')
+    c18 = fits.Column(name='FLAG', array=flags, format='J',)
     if datatype == 'sim':
         c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
         c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(2)')
         c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
         c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, cEpis, c17])
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, cEpis, c17, c18])
     else:
         c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
-        c18 = fits.Column(name='FLAG', array=flags, format='J',)
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, c18, cEpis, c17])
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, cEpis, c17, c18])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits', overwrite=True)
