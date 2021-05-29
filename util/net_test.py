@@ -19,7 +19,7 @@ class NetTest(object):
     """Interface for testing trained networks on measured or simulated data"""
     base = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     model_base = os.path.join(base, "net_archive", "")
-    data_base =  os.path.join(base, "data","")
+    data_base =  os.path.join(base, "")
     save_base =  base 
 
     def __init__(self, nets=[], datasets=[], n_nets=1, datatype="sim",
