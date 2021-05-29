@@ -2,6 +2,11 @@
 
 This package contains machine learning-based track reconstruction code for the Imaging X-ray Polarimetry Explorer (IXPE). This is v2.0 of the project, there will be updates.
 
+## v2.0 Notes:
+* New NNs are trained on 687mbar pressure (according to ixpesim) and threshold 20. Apply these settings when using them.
+* The NNs now predict for each individual event the probability that it converted in the GEMs or Be Window. Use these for cuts to improve the energy resolution and modulation factor calibration.
+* Both the long tails in the energy resolution and the non-uniform hexagonal peaks in pi-pi space have now been fixed.
+
 ## Collaborating
 * When pulling/forking the repository, note that `net_archive/` takes up ~1GB of storage due to the large neural network (NN) parameter files.
 * Please make your own branch and do not push to master.
