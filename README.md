@@ -8,7 +8,6 @@ This package contains machine learning-based track reconstruction code for the I
 * Both the long tails in the energy resolution and the non-uniform hexagonal peaks in pi-pi space have now been fixed.
 
 ## Collaborating
-* When pulling/forking the repository, note that `net_archive/` takes up ~1GB of storage due to the large neural network (NN) parameter files.
 * Please make your own branch and do not push to master.
 * Let me know of any difficulties, feature requests etc. at alpv95@stanford.edu
 
