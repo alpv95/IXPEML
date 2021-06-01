@@ -71,6 +71,6 @@ ColDefs(
 * name = 'FLAG'; format = 'J' -- True if event was flagged as being improperly reconstructed by the NNs. One should cut these events out.
 )
 
-Example applications are shown the example/Example_v2.0.ipynb.
+ Example applications are shown the example/Example_v2.0.ipynb.
 
 
