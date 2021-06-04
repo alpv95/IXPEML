@@ -417,7 +417,7 @@ class TrackAngleRegressor:
                 y_hats = np.append(y_hats, y_hat_batch)
 
                 if batch_idx % 100 == 0:
-                    print("{} of {} reconstructed.".format(int(batch_idx * X_batch.shape[0] / 3), n_samples))
+                    print("{} of {} reconstructed.".format(int(batch_idx * X_batch.shape[0] / 6), n_samples))
 
  
         if output_type == '1ang':
