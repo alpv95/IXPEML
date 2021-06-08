@@ -498,7 +498,8 @@ def pi_ambiguity_mean(ang, weight, seed=None):
     pi_fix = np.random.randint(2, size=vote.shape) * np.pi
     pi_fix[vote > 0.5] = np.pi
     pi_fix[vote < 0.5] = 0
-    return pi_pi(circular_mean(ang, weight, axis=(1,2)) + pi_fix)
+    no_direction_flag = (vote == 0.5) * 1
+    return pi_pi(circular_mean(ang, weight, axis=(1,2)) + pi_fix), no_direction_flag
 
 def post_rotate(results_tuple, N, aug, datatype="sim", losstype='mserr1', seed=None):
     '''
@@ -536,23 +537,23 @@ def post_rotate(results_tuple, N, aug, datatype="sim", losstype='mserr1', seed=N
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
         weight, weight_epis = error_combine(ang, error)
-        ang = pi_ambiguity_mean(ang, weight=1, seed=seed)
+        ang, no_direction_flag = pi_ambiguity_mean(ang, weight=1, seed=seed)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[N,-1,aug,2],"C"),axis=0)[:,0,:]
 
     if datatype == "meas":
         A = (ang, ang_mom[:,0,0], ang_sim, mom[:,0,0], weight, weight_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E, E_mom[:,0,0], 
-             zs, trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
+             zs, trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts, no_direction_flag)
     else:
         A = (ang, ang_mom[:,0,0], ang_sim[:,0,0], mom[:,0,0], weight, weight_epis, abs_pts, mom_abs_pts, abs_pts_sim, E_nn, E[:,0,0], E_mom[:,0,0], 
-            zs[:,0,0], trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts)
+            zs[:,0,0], trgs[:,0,0], flags[:,0,0], p_tail, xy_abs_pts, no_direction_flag)
     return A
 
 def fits_save(results, p_tail, file, datatype, losstype='mserr1'):
     '''Organizes final fits file save'''
     angles, angles_mom, angles_sim, moms, weights, weights_epis, abs_pts, mom_abs_pts, abs_pts_sim, \
-    energies, energies_sim, energies_mom, zs, trgs, flags, _, xy_abs_pts = results
+    energies, energies_sim, energies_mom, zs, trgs, flags, _, xy_abs_pts, no_direction_flag = results
 
     hdu = fits.PrimaryHDU()
     hdul = fits.HDUList([hdu])
@@ -571,15 +572,16 @@ def fits_save(results, p_tail, file, datatype, losstype='mserr1'):
     c12 = fits.Column(name='XY_NN_ABS', array=square2hex_abs(abs_pts, mom_abs_pts, xy_abs_pts), format='2E', dim='(2)')
     c17 = fits.Column(name='P_TAIL', array=p_tail, format='E')
     c18 = fits.Column(name='FLAG', array=flags, format='J',)
+    c19 = fits.Column(name='DIRECTION_FLAG', array=no_direction_flag, format='J',)
     if datatype == 'sim':
         c3 = fits.Column(name='PHI', array=angles_sim, format='E',)
         c9 = fits.Column(name='ABS', array=abs_pts_sim, format='2E', dim='(2)')
         c13 = fits.Column(name='XYZ_ABS', array=np.concatenate((square2hex_abs(abs_pts_sim, mom_abs_pts, xy_abs_pts), np.expand_dims(zs,axis=-1)), axis=1), format='3E', dim='(3)')
         c10 = fits.Column(name='ENERGY', array=energies_sim, format='E')
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, cEpis, c17, c18])
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, cEpis, c17, c18, c19])
     else:
         c15 = fits.Column(name='TRG_ID', array=trgs, format='J',)
-        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, cEpis, c17, c18])
+        table_hdu = fits.BinTableHDU.from_columns([c1, c2, c4, c5, c6, c7, c8, c11, c12, c14, c15, cEpis, c17, c18, c19])
 
     hdul.append(table_hdu)
     hdul.writeto(file + '.fits', overwrite=True)
