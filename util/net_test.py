@@ -24,7 +24,7 @@ class NetTest(object):
 
     def __init__(self, nets=[], datasets=[], n_nets=1, datatype="sim",
                 save_table=None, input_channels=2, stokes_correct=None, batch_size=2048, 
-                nworkers=1):
+                nworkers=1, seed=None):
  
         self.nets = [os.path.join(self.model_base,net) for net in nets]
         self.datasets = [os.path.join(self.data_base,data) for data in datasets]
@@ -32,6 +32,7 @@ class NetTest(object):
         self.n_nets = n_nets
         self.batch = batch_size
         self.nworkers = nworkers
+        self.seed = seed
         self.save_table = save_table
         self.input_channels = input_channels
         self.stokes_correct = stokes_correct
@@ -168,7 +169,8 @@ class NetTest(object):
             if self.stokes_correct:
                 results = self.stokes_correction(results)
             #Post processing for rotations and reducing repeated moments outputs
-            results = post_rotate(results, len(self.nets[:3]), aug=6, datatype=self.datatype, losstype=self.losstype)
+            results = post_rotate(results, len(self.nets[:3]), aug=6, datatype=self.datatype, 
+                                    losstype=self.losstype, seed=self.seed)
 
             results_ptail = ([],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[])
             for i, net in enumerate(self.nets[3:]):

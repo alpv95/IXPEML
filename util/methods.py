@@ -490,16 +490,17 @@ def error_combine_gauss(ang, sigma):
     weight_epistemic = circular_std(ang, axis=(1,2))
     return 1 / np.mean(sigma**2,axis=(1,2)), weight_epistemic #optimal weight
 
-def pi_ambiguity_mean(ang, weight):
+def pi_ambiguity_mean(ang, weight, seed=None):
     '''Mean track angle from ensemble [-pi,pi]. Voting algorithm for principal axis direction.'''
     vote = np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2))
-    np.random.seed(42)
+    if seed is not None:
+        np.random.seed(seed)
     pi_fix = np.random.randint(2, size=vote.shape) * np.pi
     pi_fix[vote > 0.5] = np.pi
     pi_fix[vote < 0.5] = 0
     return pi_pi(circular_mean(ang, weight, axis=(1,2)) + pi_fix)
 
-def post_rotate(results_tuple, N, aug, datatype="sim", losstype='mserr1'):
+def post_rotate(results_tuple, N, aug, datatype="sim", losstype='mserr1', seed=None):
     '''
     Takes output from gpu_test ensemble and re-rotates 3-fold angles appropriately. Also removes repeated outputs for moments.
     '''
@@ -535,7 +536,7 @@ def post_rotate(results_tuple, N, aug, datatype="sim", losstype='mserr1'):
             ang = triple_angle_rotate(ang)
         #combine epistemic and aleatoric errors and average angles
         weight, weight_epis = error_combine(ang, error)
-        ang = pi_ambiguity_mean(ang, weight=1)
+        ang = pi_ambiguity_mean(ang, weight=1, seed=seed)
 
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim,[N,-1,aug,2],"C"),axis=0)[:,0,:]
