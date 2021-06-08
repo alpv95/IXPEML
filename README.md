@@ -68,6 +68,7 @@ ColDefs(
 * name = 'NN_WEIGHT_EPIS'; format = 'E' -- NN predicted weights (epistemic) for photoelectron angles
 * name = 'P_TAIL'; format = 'E' -- NN predicted probability that event converted in the GEMs or window. Used for cuts to improve energy resolution and modulation factor.
 * name = 'FLAG'; format = 'J' -- True if event was flagged as being improperly reconstructed by the NNs. One should cut these events out.
+* name = 'DIRECTION_FLAG'; format = 'J' -- True if the NNs have no idea which direction the photoelectron went along the principal axis. The assigned direction is random (+or-).
 )
 
  Example applications are shown the example/Example_v2.0.ipynb.
