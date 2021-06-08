@@ -493,6 +493,7 @@ def error_combine_gauss(ang, sigma):
 def pi_ambiguity_mean(ang, weight):
     '''Mean track angle from ensemble [-pi,pi]. Voting algorithm for principal axis direction.'''
     vote = np.mean((ang >= np.pi/2) + (ang < -np.pi/2), axis=(1,2))
+    np.random.seed(42)
     pi_fix = np.random.randint(2, size=vote.shape) * np.pi
     pi_fix[vote > 0.5] = np.pi
     pi_fix[vote < 0.5] = 0
