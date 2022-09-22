@@ -1,5 +1,6 @@
 slurm*
 gen4*
+gen2*
 simgen*
 *.fits
 *.pickle
@@ -11,6 +12,10 @@ moments/
 .slurm*
 .DS*
 net_archive/
+results/
+scraps/
+real_data/
+data_delete/
 
 # Ignore data dir/symlink
 data/
