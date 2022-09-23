@@ -13,9 +13,9 @@ This package contains machine learning-based track reconstruction code for the I
 ## Setup
 
 There are two separate packages involved here: Deep Learning track reconstruction & GPDSW.
-The deep learning track reconstruction package runs python 3.9.0, although lower version down to 3.6 are probably ok -- gpdsw and gpdext (found in moments/gpd...) run python 2.7.1.
+The deep learning track reconstruction package runs python 3.9.0, although lower version down to 3.6 are probably ok -- gpdsw and gpdext (found in moments/gpd...) run python 2.7.1 or 3.
 
-The setup for GPDSW can be found on the IXPE wiki, with the original code repository found on the [IXPE bitbucket](https://bitbucket.org/ixpesw/workspace/projects/IGS). GPDSW is not provided here and must be installed independently by the user. Note: it is essential to have the most up to date GPDSW version.
+The setup for GPDSW can be found on the IXPE wiki, at `gpdsw/doc/doxygen/pages/installation.dox` with the original code repository found on the [IXPE bitbucket](https://bitbucket.org/ixpesw/workspace/projects/IGS). GPDSW is not provided here and must be installed independently by the user. Note: it is essential to have the most up to date GPDSW version.
 For the Deep Learning track reconstruction, the required packages are summarized in `requirements.txt`. Note if using GPUs, you will likely also need to update `cuda` and `cudnn` to the versions appropriate to your GPU and pytorch version.
 
 ## Running
