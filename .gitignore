@@ -5,13 +5,13 @@ simgen*
 *.fits
 *.pickle
 *.npy
+net_archive/
 mods/
 notebooks/
 moments/
 .vscode/
 .slurm*
 .DS*
-net_archive/
 results/
 scraps/
 real_data/
