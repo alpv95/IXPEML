@@ -14,4 +14,4 @@ ml viz
 ml py-matplotlib/3.4.2_py39
 ml py-numpy/1.20.3_py39
 
-srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/data/spectra_68720/gen4_spec_true_flat_recon.fits /home/users/alpv95/khome/tracksml/data/spectra_68720/test_aug6 --tot 500000 --sim --augment 6
+srun python3 run_build_fitsdata.py /home/users/alpv95/khome/tracksml/moments/ixpeobssimdata/mrk421/01003901/event_l1/ixpe01003801_det1_evt1_v01_filter_recon.fits /home/users/alpv95/khome/tracksml/data/mrk421/09_det1
