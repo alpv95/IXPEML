@@ -622,7 +622,6 @@ def post_rotate(results_tuple,
 
     #abs_pts get their own reshaping
     xy_abs_pts = np.reshape(xy_abs_pts, [N, -1, 2], "C")[0, :, :]
-    xy_abs_pts_true = np.reshape(xy_abs_pts_true, [N, -1, 2], "C")[0, :, :]
     mom_abs_pts = np.mean(np.reshape(mom_abs_pts, [N, -1, aug, 2], "C"),
                           axis=0)[:, 0, :]
 
@@ -643,6 +642,7 @@ def post_rotate(results_tuple,
     if datatype == "sim":
         abs_pts_sim = np.mean(np.reshape(abs_pts_sim, [N, -1, aug, 2], "C"),
                               axis=0)[:, 0, :]
+        xy_abs_pts_true = np.reshape(xy_abs_pts_true, [N, -1, 2], "C")[0, :, :]
 
     if datatype == "meas":
         A = (ang, ang_mom[:, 0,
